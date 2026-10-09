@@ -1,0 +1,4694 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sausage vs Turkey</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 font-size=%2280%22><text y=%220.9em%22>🌭</text></svg>">
+<style>
+/* =========================================================================
+   style.css — Habillage cartoon de l'interface (menus, HUD, écrans de fin).
+   Le rendu du jeu lui-même (personnages, arène) est dessiné sur le canvas
+   par le JavaScript ; ce fichier ne s'occupe que des éléments HTML
+   superposés au-dessus (menus, barres de vie, boutons...).
+   ========================================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #2a1e12;
+  font-family: 'Segoe UI', Verdana, Tahoma, sans-serif;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+#game-wrapper {
+  width: 100%;
+  max-width: 960px;
+  padding: 12px;
+}
+
+#canvas-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 960 / 540;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 0 6px #3a2a18, 0 0 0 10px #6b4a26;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- Texte "cartoon" en pur CSS (pas de police externe) ------------- */
+.comic-text {
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #fff8e8;
+  -webkit-text-stroke: 2px #2a1a0d;
+  text-shadow: 3px 3px 0 #2a1a0d, 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- HUD (barres de vie + logo pendant le combat) --------------------- */
+#hud {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 16px;
+  pointer-events: none;
+  gap: 10px;
+}
+
+.hud-side {
+  flex: 1;
+  min-width: 0;
+}
+
+.hud-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.player-name {
+  font-size: clamp(11px, 2vw, 15px);
+  font-weight: 800;
+  color: #fff8e8;
+  text-shadow: 1px 1px 0 #2a1a0d, 0 2px 4px rgba(0, 0, 0, 0.5);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.health-bar-outer {
+  width: 100%;
+  height: 20px;
+  background: #1c1108;
+  border: 3px solid #2a1a0d;
+  border-radius: 10px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), 0 2px 3px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.health-bar-inner {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(180deg, #7fe05a 0%, #3f9e2c 100%);
+  transition: width 0.18s ease-out, background-color 0.2s;
+  border-radius: 6px 0 0 6px;
+}
+
+.health-bar-outer.flip .health-bar-inner {
+  margin-left: auto;
+  border-radius: 0 6px 6px 0;
+}
+
+.health-bar-inner.mid { background: linear-gradient(180deg, #f5d64a 0%, #c99a13 100%); }
+.health-bar-inner.low { background: linear-gradient(180deg, #f05a4a 0%, #b8271a 100%); }
+
+.hud-logo {
+  flex-shrink: 0;
+  font-size: clamp(13px, 2.6vw, 20px);
+  padding-top: 2px;
+  white-space: nowrap;
+}
+.hud-logo span { color: #ffd23a; }
+
+/* ---- Écrans superposés (menu, game over, décompte) --------------------- */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 30%, rgba(60, 40, 20, 0.88), rgba(20, 12, 6, 0.94));
+  color: #fff8e8;
+}
+
+.hidden { display: none !important; }
+
+.logo {
+  font-size: clamp(26px, 6vw, 46px);
+  margin: 0;
+  line-height: 1.15;
+}
+.logo span { color: #ffd23a; }
+
+.subtitle {
+  margin: -8px 0 4px;
+  font-size: clamp(12px, 2.4vw, 16px);
+  opacity: 0.9;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 380px;
+}
+.menu-buttons.row {
+  flex-direction: row;
+  max-width: 460px;
+}
+
+.btn {
+  font-family: inherit;
+  font-weight: 800;
+  font-size: clamp(13px, 2.6vw, 17px);
+  padding: 13px 18px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  color: #2a1a0d;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.35), 0 8px 14px rgba(0, 0, 0, 0.3);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  flex: 1;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+
+.btn-primary { background: linear-gradient(180deg, #ffd23a, #f2a007); }
+.btn-secondary { background: linear-gradient(180deg, #ffefc4, #f5d089); }
+.btn-secondary.active { outline: 3px solid #ff6a3a; }
+
+.controls-recap {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
+  font-size: clamp(11px, 2.2vw, 13px);
+  opacity: 0.92;
+}
+.controls-recap h3 {
+  margin: 0 0 4px;
+  color: #ffd23a;
+  font-size: 1.05em;
+}
+.controls-recap p { margin: 2px 0; }
+.controls-col { min-width: 140px; }
+
+#difficulty-select p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.winner-banner {
+  font-size: clamp(24px, 6vw, 42px);
+  line-height: 1.3;
+}
+.winner-banner .who { display: block; font-size: 1.3em; }
+.winner-banner .sub { display: block; font-size: 0.4em; opacity: 0.85; -webkit-text-stroke: 1px #2a1a0d; }
+
+#countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+#countdown-text {
+  font-size: clamp(50px, 14vw, 110px);
+  animation: pop 0.35s ease;
+}
+@keyframes pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.footer-hint {
+  position: absolute;
+  bottom: 10px;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: #fff8e8;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+@media (max-width: 480px) {
+  .controls-recap { display: none; }
+}
+
+/* =========================================================================
+   Ajouts v2 : écran de configuration, cartes personnages/arènes, jauges
+   de spécial dans le HUD.
+   ========================================================================= */
+
+/* Les écrans peuvent défiler si le contenu dépasse (petites fenêtres). */
+.screen {
+  overflow-y: auto;
+  justify-content: flex-start;
+}
+.screen > :first-child { margin-top: auto; }
+.screen > :last-child { margin-bottom: auto; }
+
+/* ---- Jauge de spécial (HUD) ------------------------------------------ */
+.special-meter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  width: 100%;
+  max-width: 190px;
+}
+.special-meter.flip { flex-direction: row-reverse; }
+
+.special-icon {
+  font-size: 16px;
+  filter: grayscale(1) opacity(0.55);
+  transition: filter 0.15s;
+}
+.special-icon.ready {
+  filter: none;
+  animation: specialPulse 0.7s ease-in-out infinite alternate;
+}
+@keyframes specialPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.3); }
+}
+
+.special-bar-outer {
+  flex: 1;
+  height: 10px;
+  background: #1c1108;
+  border: 2px solid #2a1a0d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.special-bar-inner {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(180deg, #7ad7ff, #2a8fd6);
+  transition: width 0.1s linear;
+}
+.special-bar-inner.ready {
+  background: linear-gradient(180deg, #ffe36a, #ffb21a);
+  box-shadow: 0 0 8px #ffd23a;
+}
+.special-bar-outer.flip .special-bar-inner { margin-left: auto; }
+
+.special-key {
+  font-size: 10px;
+  font-weight: 900;
+  color: #2a1a0d;
+  background: #fff8e8;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ---- Écran de configuration ------------------------------------------ */
+#screen-setup {
+  padding: 12px 18px;
+  gap: 8px;
+}
+.setup-title {
+  margin: 0;
+  font-size: clamp(18px, 3.4vw, 26px);
+}
+.setup-columns {
+  display: flex;
+  gap: 18px;
+  width: 100%;
+  max-width: 860px;
+}
+.picker { flex: 1; min-width: 0; }
+.picker-wide { width: 100%; max-width: 860px; }
+.picker h3 {
+  margin: 0 0 4px;
+  color: #ffd23a;
+  font-size: clamp(11px, 1.9vw, 14px);
+  text-align: left;
+}
+#arena-info { color: #fff8e8; font-weight: 600; }
+
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.arena-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.pick-card {
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 3px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff8e8;
+  cursor: pointer;
+  transition: background 0.12s, transform 0.1s, box-shadow 0.12s;
+}
+.pick-card:hover { background: rgba(255, 255, 255, 0.22); transform: translateY(-1px); }
+.pick-emoji { font-size: clamp(20px, 3.6vw, 28px); line-height: 1.1; }
+.pick-name { font-size: clamp(9px, 1.6vw, 12px); font-weight: 800; text-align: center; line-height: 1.15; }
+.pick-card.selected {
+  border-color: #ffd23a;
+  background: rgba(255, 210, 58, 0.26);
+  box-shadow: 0 0 10px rgba(255, 210, 58, 0.55);
+}
+
+.arena-card {
+  background: linear-gradient(180deg, var(--arena-top), var(--arena-bottom));
+  color: #2a1a0d;
+  border-color: rgba(0, 0, 0, 0.18);
+}
+.arena-card:hover { background: linear-gradient(180deg, var(--arena-top), var(--arena-bottom)); filter: brightness(1.07); }
+.arena-card .pick-name { font-size: clamp(8px, 1.35vw, 10px); }
+.arena-card.selected {
+  border-color: var(--arena-accent);
+  background: linear-gradient(180deg, var(--arena-top), var(--arena-bottom));
+  box-shadow: 0 0 0 2px var(--arena-accent), 0 0 14px var(--arena-accent);
+}
+
+.char-info {
+  margin-top: 5px;
+  padding: 5px 8px;
+  min-height: 4.2em;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: clamp(9px, 1.5vw, 11px);
+  line-height: 1.35;
+  text-align: left;
+}
+.char-info .trait { opacity: 0.88; }
+.char-info .special-name { color: #ffd23a; font-weight: 800; }
+
+#setup-difficulty { width: 100%; display: flex; justify-content: center; }
+#setup-difficulty .menu-buttons { max-width: 380px; }
+.setup-actions { max-width: 380px; margin-top: 2px; }
+#screen-setup .btn {
+  padding: 8px 14px;
+  font-size: clamp(12px, 2.2vw, 15px);
+}
+
+
+/* =========================================================================
+   MODE MOBILE — commandes tactiles
+   ========================================================================= */
+
+#mobile-controls,
+.mobile-hint {
+  display: none;
+}
+
+@media (pointer: coarse), (max-width: 700px) {
+  html, body {
+    width: 100%;
+    height: 100%;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
+  body {
+    padding: 0;
+    background: #17100a;
+  }
+
+  #game-wrapper {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #canvas-container {
+    width: 100vw;
+    max-width: 100vw;
+    aspect-ratio: 960 / 540;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  #game-canvas {
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+
+  /* Les écrans de menu restent utilisables au doigt. */
+  .screen {
+    padding: 18px;
+    gap: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .btn {
+    min-height: 52px;
+    padding: 12px 16px;
+    font-size: 16px;
+    touch-action: manipulation;
+  }
+
+  .menu-buttons {
+    max-width: 440px;
+  }
+
+  .controls-recap,
+  .footer-hint {
+    display: none !important;
+  }
+
+  .setup-columns {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .char-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .arena-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .pick-card {
+    min-height: 58px;
+    touch-action: manipulation;
+  }
+
+  #screen-setup {
+    padding: 10px;
+  }
+
+  /* HUD plus compact sur les petits écrans. */
+  #hud {
+    padding: 8px 8px;
+    gap: 5px;
+  }
+
+  .hud-logo {
+    font-size: 11px;
+  }
+
+  .health-bar-outer {
+    height: 14px;
+    border-width: 2px;
+  }
+
+  .special-meter {
+    max-width: 130px;
+    margin-top: 2px;
+  }
+
+  .special-icon {
+    font-size: 13px;
+  }
+
+  .special-bar-outer {
+    height: 7px;
+    border-width: 1px;
+  }
+
+  .special-key {
+    display: none;
+  }
+
+  /* Zone de boutons translucides au-dessus du combat. */
+  #mobile-controls {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: min(31vw, 190px);
+    min-height: 130px;
+    display: block;
+    z-index: 20;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+
+  .mobile-movement,
+  .mobile-actions {
+    position: absolute;
+    bottom: 12px;
+    display: flex;
+    align-items: flex-end;
+    gap: 9px;
+    pointer-events: auto;
+  }
+
+  .mobile-movement {
+    left: 12px;
+  }
+
+  .mobile-actions {
+    right: 12px;
+  }
+
+  .touch-btn {
+    width: clamp(48px, 14vw, 76px);
+    height: clamp(48px, 14vw, 76px);
+    border: 2px solid rgba(255,255,255,.42);
+    border-radius: 50%;
+    background: rgba(25, 17, 10, .62);
+    color: #fff8e8;
+    font: 900 clamp(18px, 5vw, 28px)/1 'Segoe UI', sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,.35), inset 0 1px 2px rgba(255,255,255,.16);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    padding: 0;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .touch-btn.pressed {
+    transform: scale(.90);
+    background: rgba(255, 210, 58, .78);
+    color: #2a1a0d;
+  }
+
+  .touch-jump {
+    width: clamp(54px, 15vw, 82px);
+    height: clamp(54px, 15vw, 82px);
+  }
+
+  .touch-light {
+    transform: translateY(16px);
+  }
+
+  .touch-heavy {
+    transform: translateY(-12px);
+  }
+
+  .touch-special {
+    transform: translateY(-28px);
+  }
+
+  .touch-dodge {
+    transform: translateY(20px);
+  }
+
+  .touch-light.pressed,
+  .touch-heavy.pressed,
+  .touch-special.pressed,
+  .touch-dodge.pressed {
+    transform: scale(.90);
+  }
+
+  .mobile-hint {
+    display: block;
+    position: absolute;
+    left: 50%;
+    bottom: 4px;
+    transform: translateX(-50%);
+    z-index: 21;
+    color: rgba(255,248,232,.65);
+    font-size: 10px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+}
+
+/* Téléphone en paysage : laisser davantage de place à l'arène. */
+@media (pointer: coarse) and (orientation: landscape) {
+  #mobile-controls {
+    height: 35vh;
+    min-height: 110px;
+  }
+
+  .mobile-movement,
+  .mobile-actions {
+    bottom: 8px;
+  }
+
+  .mobile-hint {
+    display: none;
+  }
+}
+
+</style>
+
+<style>
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden !important;
+  -webkit-text-size-adjust: 100%;
+}
+button, .btn, .pick-card, .touch-btn {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  body { width: 100vw; min-width: 0; }
+  #game-wrapper { width: 100vw; height: 100dvh; }
+  #canvas-container { width: 100vw; height: min(100dvh, 56.25vw); }
+  .screen { width: 100%; max-width: 100%; overflow-x: hidden; }
+  .btn, .pick-card, .touch-btn { cursor: pointer; }
+  #mobile-controls { touch-action: none; }
+}
+</style>
+
+</head>
+<body>
+
+<div id="game-wrapper">
+  <div id="canvas-container">
+    <canvas id="game-canvas" width="960" height="540"></canvas>
+
+    <!-- HUD affiché pendant le combat -->
+    <div id="hud" class="hidden">
+      <div class="hud-side hud-left">
+        <div class="player-name" id="p1-name">🌭 Joueur 1 — Sausage</div>
+        <div class="health-bar-outer"><div class="health-bar-inner" id="p1-health"></div></div>
+        <div class="special-meter">
+          <span class="special-icon" id="p1-special-icon">✨</span>
+          <div class="special-bar-outer"><div class="special-bar-inner" id="p1-special-fill"></div></div>
+          <span class="special-key">H</span>
+        </div>
+      </div>
+      <div class="hud-logo comic-text">SAUSAGE <span>VS</span> TURKEY</div>
+      <div class="hud-side hud-right">
+        <div class="player-name" id="p2-name">🦃 Joueur 2 — Turkey</div>
+        <div class="health-bar-outer flip"><div class="health-bar-inner" id="p2-health"></div></div>
+        <div class="special-meter flip">
+          <span class="special-icon" id="p2-special-icon">✨</span>
+          <div class="special-bar-outer flip"><div class="special-bar-inner" id="p2-special-fill"></div></div>
+          <span class="special-key">M</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Décompte "3, 2, 1, COMBAT !" -->
+    <div id="countdown" class="hidden">
+      <div id="countdown-text" class="comic-text"></div>
+    </div>
+
+    <!-- Écran de menu principal -->
+    <div id="screen-menu" class="screen">
+      <h1 class="logo comic-text">🌭 SAUSAGE <span>VS</span> TURKEY 🦃</h1>
+      <p class="subtitle">6 combattants, 5 arènes, 1 cuisine : que le meilleur plat gagne !</p>
+
+      <div class="menu-buttons" id="mode-buttons">
+        <button id="btn-mode-pvp" class="btn btn-primary">👫 2 Joueurs — même clavier</button>
+        <button id="btn-mode-solo" class="btn btn-primary">🤖 Solo contre l'IA</button>
+      </div>
+
+      <div class="controls-recap">
+        <div class="controls-col">
+          <h3>Joueur 1</h3>
+          <p>Q / D — déplacement · Z — saut</p>
+          <p>F — légère · G — lourde</p>
+          <p>H — SPÉCIAL · S — esquive</p>
+        </div>
+        <div class="controls-col">
+          <h3>Joueur 2</h3>
+          <p>← / → — déplacement · ↑ — saut</p>
+          <p>K — légère · L — lourde</p>
+          <p>M — SPÉCIAL · ↓ — esquive</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Écran de configuration : personnages, arène, difficulté -->
+    <div id="screen-setup" class="screen hidden">
+      <h2 class="setup-title comic-text">Prépare le combat</h2>
+      <div class="setup-columns">
+        <div class="picker">
+          <h3>🌭 Joueur 1</h3>
+          <div class="char-grid" id="p1-character-grid"></div>
+          <div class="char-info" id="p1-info"></div>
+        </div>
+        <div class="picker">
+          <h3 id="p2-picker-title">👤 Joueur 2</h3>
+          <div class="char-grid" id="p2-character-grid"></div>
+          <div class="char-info" id="p2-info"></div>
+        </div>
+      </div>
+      <div class="picker picker-wide">
+        <h3>🗺️ Arène — <span id="arena-info"></span></h3>
+        <div class="arena-grid" id="arena-grid"></div>
+      </div>
+      <div id="setup-difficulty" class="hidden">
+        <div class="menu-buttons row">
+          <button class="btn btn-secondary" data-difficulty="easy">😌 Facile</button>
+          <button class="btn btn-secondary active" data-difficulty="normal">🙂 Normal</button>
+          <button class="btn btn-secondary" data-difficulty="hard">🔥 Difficile</button>
+        </div>
+      </div>
+      <div class="menu-buttons row setup-actions">
+        <button id="btn-setup-back" class="btn btn-secondary">◀ Retour</button>
+        <button id="btn-start-match" class="btn btn-primary">▶ Combattre !</button>
+      </div>
+    </div>
+
+    <!-- Écran de victoire -->
+    <div id="screen-gameover" class="screen hidden">
+      <div class="winner-banner comic-text" id="winner-banner"></div>
+      <div class="menu-buttons">
+        <button id="btn-replay" class="btn btn-primary">🔁 Rejouer</button>
+        <button id="btn-change-setup" class="btn btn-secondary">🎭 Changer persos / arène</button>
+        <button id="btn-back-menu" class="btn btn-secondary">🏠 Menu principal</button>
+      </div>
+    </div>
+
+    <!-- Commandes tactiles : affichées uniquement sur téléphone/tablette.
+         Les boutons pilotent les mêmes touches virtuelles que le clavier. -->
+    <div id="mobile-controls" aria-label="Commandes tactiles">
+      <div class="mobile-movement">
+        <button class="touch-btn touch-move" data-key="q" data-hold="1" aria-label="Gauche">◀</button>
+        <button class="touch-btn touch-jump" data-key="z" aria-label="Saut">▲</button>
+        <button class="touch-btn touch-move" data-key="d" data-hold="1" aria-label="Droite">▶</button>
+      </div>
+      <div class="mobile-actions">
+        <button class="touch-btn touch-dodge" data-key="s" aria-label="Esquive">↶</button>
+        <button class="touch-btn touch-light" data-key="f" aria-label="Attaque légère">👊</button>
+        <button class="touch-btn touch-heavy" data-key="g" aria-label="Attaque lourde">💥</button>
+        <button class="touch-btn touch-special" data-key="h" aria-label="Attaque spéciale">✨</button>
+      </div>
+    </div>
+
+    <div class="mobile-hint" id="mobile-hint">Mode mobile : touche les boutons pour combattre</div>
+
+    <div class="footer-hint" id="footer-hint">Échap : revenir au menu</div>
+  </div>
+</div>
+
+<!-- Ordre important : chaque fichier dépend des précédents (pas de modules
+     ES, tout est en portée globale pour pouvoir lancer le jeu en ouvrant
+     simplement ce fichier dans un navigateur, sans serveur). -->
+<script>
+/* constants.js */
+/* =========================================================================
+   constants.js
+   Toutes les constantes du jeu au même endroit : dimensions, physique,
+   contrôles clavier, thèmes d'arène. C'est LE fichier à ouvrir en premier
+   pour comprendre ou ajuster l'équilibrage général du jeu.
+   ========================================================================= */
+
+// ---- Dimensions de la scène de jeu -----------------------------------
+const CANVAS_WIDTH = 960;
+const CANVAS_HEIGHT = 540;
+
+// ---- Sol / plateau de combat --------------------------------------------
+const FLOOR_Y = 430;       // ligne (en y) du sol à l'écran
+const PAN_LEFT = 110;      // bord intérieur gauche du plateau (mur invisible)
+const PAN_RIGHT = 850;     // bord intérieur droit du plateau (mur invisible)
+
+// ---- Physique (unités par seconde, indépendant du framerate) -----------
+const GRAVITY = 2200;          // px/s² : accélération vers le bas en l'air
+const JUMP_FORCE = 620;        // px/s : vitesse verticale initiale au saut
+const MOVE_SPEED = 260;        // px/s : vitesse de déplacement au sol
+const AIR_MOVE_FACTOR = 0.85;  // contrôle légèrement réduit en l'air
+
+// Vitesse à laquelle vx "rattrape" sa cible (plus haut = plus réactif).
+// Sur une surface glissante, cette valeur est beaucoup plus basse => glisse.
+const GROUND_GRIP = 18;
+const OIL_GRIP = 2.6;
+const AIR_GRIP = 8;
+
+// ---- Combattants (boîte de collision) -----------------------------------
+const FIGHTER_WIDTH = 64;
+const FIGHTER_HEIGHT = 118;
+const HEALTH_MAX = 100;
+
+// ---- Attaques de base (communes à tous les personnages) -----------------
+// startup = temps avant que le coup devienne actif (pas de dégâts pendant)
+// active  = fenêtre pendant laquelle le coup peut toucher
+// recovery= temps de récupération après le coup, avant de pouvoir rejouer
+// Tous les temps sont en secondes. Les attaques SPÉCIALES, elles, sont
+// propres à chaque personnage : voir l'objet `special` dans characters.js.
+const ATTACKS = {
+  light: {
+    kind: 'melee',
+    damage: 6,
+    range: 58,
+    startup: 0.08,
+    active: 0.09,
+    recovery: 0.16,
+    knockback: 220,
+    hitstun: 0.22,
+    lunge: 0,
+  },
+  heavy: {
+    kind: 'melee',
+    damage: 15,
+    range: 78,
+    startup: 0.22,
+    active: 0.12,
+    recovery: 0.38,
+    knockback: 420,
+    hitstun: 0.45,
+    lunge: 140, // petite ruée en avant pendant le "startup" pour plus de peps
+  },
+};
+
+// ---- Esquive ----------------------------------------------------------
+const DODGE_DURATION = 0.28;   // secondes, invulnérabilité totale pendant ce temps
+const DODGE_SPEED = 480;       // px/s, vitesse du pas en arrière
+const DODGE_COOLDOWN = 0.55;   // secondes avant de pouvoir esquiver à nouveau
+
+// ---- Zone chaude centrale ------------------------------------------------
+const HOT_ZONE_CENTER_X = (PAN_LEFT + PAN_RIGHT) / 2;
+const HOT_ZONE_HALF_WIDTH = 95;
+const HOT_ZONE_DPS = 6;        // dégâts par seconde si on reste dedans
+const HOT_ZONE_PUSH = 260;     // px/s², pousse les joueurs vers l'extérieur
+
+// ---- Surfaces glissantes -------------------------------------------------
+const OIL_PUDDLES = [
+  { x1: 165, x2: 275 },
+  { x1: 685, x2: 795 },
+];
+
+// ---- Obstacles statiques (à sauter) --------------------------------------
+// Disposés symétriquement de part et d'autre de la zone chaude centrale,
+// avec une marge de sécurité pour ne jamais chevaucher les points de
+// départ des combattants ni la zone chaude.
+const OBSTACLES = [
+  { x: 335, width: 40, height: 26, clear: 12 },
+  { x: 585, width: 40, height: 26, clear: 12 },
+];
+// `clear` : hauteur de saut (px) à partir de laquelle on franchit l'obstacle.
+// Volontairement basse pour que même les personnages lents (Burger,
+// Avocado) puissent le sauter facilement. La collision ne tient compte que
+// des PIEDS du personnage (FEET_HALF_WIDTH), pas de toute sa largeur.
+const FEET_HALF_WIDTH = 20;
+
+// ---- Projectiles au sol (légumes/objets à envoyer valser) ---------------
+const VEGGIE_COUNT = 3;
+const VEGGIE_LAUNCH_SPEED = 620;
+const VEGGIE_GRAVITY = 1500;
+const VEGGIE_RESPAWN_DELAY = 2.5;
+
+// ---- Impact / "juice" ----------------------------------------------------
+const HITSTOP_LIGHT = 0.045;   // gel court de l'image à l'impact (coup léger)
+const HITSTOP_HEAVY = 0.09;    // gel plus long (coup lourd / spécial)
+
+// ---- Contrôles ----------------------------------------------------------
+// On utilise `event.key` (la lettre réellement produite) plutôt que
+// `event.code` : ainsi les touches correspondent bien aux lettres
+// imprimées sur le clavier, quel que soit sa disposition.
+//
+// NB : la spécification d'origine ne prévoyait pas de touche d'esquive ou
+// d'attaque spéciale dédiées. On a choisi des touches qui complètent
+// naturellement les schémas existants :
+//   - P1 : F(légère)-G(lourde)-H(spéciale) est une suite naturelle sur la
+//     même rangée du clavier ; S complète Q/Z/D façon ZQSD pour l'esquive.
+//   - P2 : K(légère)-L(lourde)-M(spéciale), même logique en miroir ;
+//     Flèche bas comme esquive, symétrique du saut/flèche haut.
+const CONTROLS = {
+  p1: {
+    left: 'q',
+    right: 'd',
+    jump: 'z',
+    light: 'f',
+    heavy: 'g',
+    special: 'h',
+    dodge: 's',
+  },
+  p2: {
+    left: 'arrowleft',
+    right: 'arrowright',
+    jump: 'arrowup',
+    light: 'k',
+    heavy: 'l',
+    special: 'm',
+    dodge: 'arrowdown',
+  },
+};
+
+// ---- Couleurs des personnages (facile à changer pour un reskin rapide) --
+const COLORS = {
+  sausage: {
+    body: '#e0714a',
+    bodyDark: '#b8542f',
+    grill: '#7a3418',
+    glove: '#f4f1ea',
+  },
+  turkey: {
+    body: '#8a5a3b',
+    bodyDark: '#6b4128',
+    feather1: '#c0392b',
+    feather2: '#e67e22',
+    feather3: '#f1c40f',
+    beak: '#f39c12',
+    wattle: '#c0392b',
+  },
+  pizza: {
+    body: '#f6cd58',
+    bodyDark: '#e0a72e',
+    crust: '#d99a4e',
+    crustDark: '#b5793a',
+    pepperoni: '#c0392b',
+    basil: '#3f9142',
+  },
+  avocado: {
+    body: '#7fae42',
+    bodyDark: '#4f7a2c',
+    flesh: '#d9e06a',
+    pit: '#8a5a34',
+    pitDark: '#5f3c20',
+  },
+  burger: {
+    bun: '#e8b35c',
+    bunDark: '#c68936',
+    patty: '#7a4a2c',
+    pattyDark: '#5c3620',
+    lettuce: '#7cb342',
+    tomato: '#d64545',
+    cheese: '#ffd23a',
+  },
+  icecream: {
+    scoop: '#ffd9ec',
+    scoopDark: '#f2a9cf',
+    vanilla: '#fff6e4',
+    cone: '#d99a4e',
+    coneDark: '#b5793a',
+    cherry: '#d6283f',
+  },
+};
+
+// ---- Difficultés de l'IA ------------------------------------------------
+const AI_DIFFICULTIES = {
+  easy: { decisionInterval: 0.45, aggressiveness: 0.35, dodgeChance: 0.15, mistakeChance: 0.35, specialChance: 0.12 },
+  normal: { decisionInterval: 0.28, aggressiveness: 0.55, dodgeChance: 0.32, mistakeChance: 0.18, specialChance: 0.22 },
+  hard: { decisionInterval: 0.14, aggressiveness: 0.78, dodgeChance: 0.55, mistakeChance: 0.05, specialChance: 0.35 },
+};
+
+/* =========================================================================
+   THÈMES D'ARÈNE — chaque thème reskinne entièrement le décor et les
+   pièges (couleurs, icônes, projectiles) mais garde la même disposition
+   de jeu (mêmes positions de zone chaude / surfaces glissantes / obstacles)
+   pour un équilibrage identique quelle que soit l'arène choisie.
+
+   Voir le guide "AJOUTER UNE NOUVELLE ARÈNE" en bas de arena.js pour
+   ajouter un thème supplémentaire.
+   ========================================================================= */
+const ARENA_THEMES = {
+  poele: {
+    id: 'poele',
+    name: 'La Poêle Sizzlante',
+    emoji: '🍳',
+    floorStyle: 'pan',
+    wallTop: '#fff2d6',
+    wallBottom: '#f6dfb0',
+    accent: '#ff8a3a',
+    hotLabel: 'Feu vif',
+    hotEmoji: '🔥',
+    slipEmoji: '💧',
+    slipInner: '255,224,120',
+    slipMid: '224,164,40',
+    obstacleEmoji: '🧂',
+    obstacleBase: '#e8e2d6',
+    veggieTypes: [
+      { emoji: '🥕', damage: 5, radius: 16 },
+      { emoji: '🍅', damage: 5, radius: 16 },
+      { emoji: '🧅', damage: 4, radius: 15 },
+    ],
+    propsLeft: ['🍴', '🥄', '🔪'],
+    propsRight: ['🧄', '🌿', '🫙'],
+    ambientEmoji: '♨️',
+  },
+  barbecue: {
+    id: 'barbecue',
+    name: 'Le Barbecue du Jardin',
+    emoji: '🍢',
+    floorStyle: 'grill',
+    wallTop: '#bfe6ff',
+    wallBottom: '#eaf7e0',
+    accent: '#ff5a2a',
+    hotLabel: 'Braises',
+    hotEmoji: '♨️',
+    slipEmoji: '🧈',
+    slipInner: '255,200,120',
+    slipMid: '190,110,30',
+    obstacleEmoji: '🍾',
+    obstacleBase: '#dfe8e0',
+    veggieTypes: [
+      { emoji: '🌽', damage: 5, radius: 16 },
+      { emoji: '🫑', damage: 5, radius: 15 },
+      { emoji: '🍄', damage: 4, radius: 14 },
+    ],
+    propsLeft: ['🔥', '🥩', '🍖'],
+    propsRight: ['🍺', '🌳', '☀️'],
+    ambientEmoji: '✨',
+  },
+  buffet: {
+    id: 'buffet',
+    name: 'Le Buffet du Goûter',
+    emoji: '🎂',
+    floorStyle: 'cake',
+    wallTop: '#ffe3f2',
+    wallBottom: '#ffd3ea',
+    accent: '#ff5fa0',
+    hotLabel: 'Bougies',
+    hotEmoji: '🕯️',
+    slipEmoji: '🍦',
+    slipInner: '255,214,235',
+    slipMid: '235,150,190',
+    obstacleEmoji: '🎁',
+    obstacleBase: '#fff0f6',
+    veggieTypes: [
+      { emoji: '🍩', damage: 5, radius: 16 },
+      { emoji: '🧁', damage: 5, radius: 16 },
+      { emoji: '🍬', damage: 4, radius: 13 },
+    ],
+    propsLeft: ['🎈', '🎉', '🍰'],
+    propsRight: ['🎈', '🍭', '🧁'],
+    ambientEmoji: '✨',
+  },
+  freezer: {
+    id: 'freezer',
+    name: 'Le Congélateur Givré',
+    emoji: '🧊',
+    floorStyle: 'freezer',
+    wallTop: '#dff3ff',
+    wallBottom: '#bfe3f7',
+    accent: '#4fb6ff',
+    hotLabel: 'Dégivrage',
+    hotEmoji: '♨️',
+    slipEmoji: '❄️',
+    slipInner: '225,245,255',
+    slipMid: '140,200,235',
+    obstacleEmoji: '🧊',
+    obstacleBase: '#e8f6ff',
+    veggieTypes: [
+      { emoji: '🍧', damage: 5, radius: 16 },
+      { emoji: '🫐', damage: 4, radius: 13 },
+      { emoji: '🍡', damage: 5, radius: 15 },
+    ],
+    propsLeft: ['🥶', '🧊', '🍦'],
+    propsRight: ['❄️', '🥦', '🫛'],
+    ambientEmoji: '❄️',
+  },
+  wok: {
+    id: 'wok',
+    name: 'Le Wok Bouillonnant',
+    emoji: '🥡',
+    floorStyle: 'wok',
+    wallTop: '#ffd9c2',
+    wallBottom: '#f3a77f',
+    accent: '#ff3d2e',
+    hotLabel: 'Flamme vive',
+    hotEmoji: '🔥',
+    slipEmoji: '🍜',
+    slipInner: '255,170,90',
+    slipMid: '190,70,20',
+    obstacleEmoji: '🥢',
+    obstacleBase: '#7a4a2c',
+    veggieTypes: [
+      { emoji: '🥟', damage: 5, radius: 16 },
+      { emoji: '🌶️', damage: 6, radius: 14 },
+      { emoji: '🍤', damage: 5, radius: 15 },
+    ],
+    propsLeft: ['🏮', '🥢', '🍜'],
+    propsRight: ['🥠', '🏮', '🍚'],
+    ambientEmoji: '♨️',
+  },
+};
+
+</script>
+<script>
+/* utils.js */
+/* =========================================================================
+   utils.js — petites fonctions utilitaires partagées
+   ========================================================================= */
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// Interpolation "exponentielle" indépendante du framerate : rapproche
+// `current` de `target` à une vitesse proportionnelle à `grip` et au temps
+// écoulé `dt`. Utilisé pour l'accélération / le freinage des combattants.
+function approach(current, target, grip, dt) {
+  const t = 1 - Math.exp(-grip * dt);
+  return lerp(current, target, t);
+}
+
+function rectsOverlap(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function randRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function randInt(min, max) {
+  return Math.floor(randRange(min, max + 1));
+}
+
+function pick(array) {
+  return array[Math.floor(Math.random() * array.length)];
+}
+
+// Rectangle aux coins arrondis, tracé dans le chemin courant (pas de
+// dépendance à ctx.roundRect natif, pour une compatibilité maximale).
+function pathRoundedRect(ctx, x, y, w, h, r) {
+  const rad = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.lineTo(x + w - rad, y);
+  ctx.arcTo(x + w, y, x + w, y + rad, rad);
+  ctx.lineTo(x + w, y + h - rad);
+  ctx.arcTo(x + w, y + h, x + w - rad, y + h, rad);
+  ctx.lineTo(x + rad, y + h);
+  ctx.arcTo(x, y + h, x, y + h - rad, rad);
+  ctx.lineTo(x, y + rad);
+  ctx.arcTo(x, y, x + rad, y, rad);
+  ctx.closePath();
+}
+
+// Ombre de contact au sol : s'aplatit/s'agrandit légèrement selon la
+// hauteur de saut, pour ancrer visuellement le personnage au sol.
+function drawContactShadow(ctx, x, floorY, height, baseRx) {
+  const shrink = clamp(1 - height / 220, 0.35, 1);
+  ctx.fillStyle = `rgba(20,10,5,${0.32 * shrink})`;
+  ctx.beginPath();
+  ctx.ellipse(x, floorY, baseRx * shrink, baseRx * 0.28 * shrink, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Polygone aux coins arrondis (ex : la silhouette triangulaire de Pizza).
+// `points` est un tableau de {x,y} ; `r` le rayon d'arrondi des coins.
+function pathRoundedPolygon(ctx, points, r) {
+  const n = points.length;
+  const unit = (dx, dy) => {
+    const len = Math.hypot(dx, dy) || 1;
+    return [dx / len, dy / len];
+  };
+  const prev0 = points[n - 1];
+  const cur0 = points[0];
+  const [ux0, uy0] = unit(cur0.x - prev0.x, cur0.y - prev0.y);
+  ctx.beginPath();
+  ctx.moveTo(cur0.x - ux0 * r, cur0.y - uy0 * r);
+  for (let i = 0; i < n; i++) {
+    const curr = points[i];
+    const next = points[(i + 1) % n];
+    ctx.arcTo(curr.x, curr.y, next.x, next.y, r);
+  }
+  ctx.closePath();
+}
+
+</script>
+<script>
+/* input.js */
+/* =========================================================================
+   input.js — capture du clavier pour les deux joueurs
+   ========================================================================= */
+
+class InputManager {
+  constructor() {
+    this.down = new Set();       // touches actuellement maintenues
+    this.justPressed = new Set(); // touches pressées CETTE frame (édge-trigger)
+
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      // Empêche le défilement de la page avec les flèches / espace.
+      if (key.startsWith('arrow') || key === ' ') e.preventDefault();
+
+      this.down.add(key);
+      if (!e.repeat) this.justPressed.add(key);
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      this.down.delete(key);
+    });
+
+    // Si la fenêtre perd le focus, on relâche tout pour éviter les
+    // touches "bloquées" enfoncées.
+    window.addEventListener('blur', () => {
+      this.down.clear();
+    });
+  }
+
+  // Entrées virtuelles utilisées par les boutons tactiles mobile.
+  // Elles utilisent exactement le même système que le clavier afin de
+  // conserver toute la logique de combat existante.
+  setVirtualDown(key, value) {
+    if (value) this.down.add(key);
+    else this.down.delete(key);
+  }
+
+  pressVirtual(key) {
+    this.down.add(key);
+    this.justPressed.add(key);
+  }
+
+  releaseVirtual(key) {
+    this.down.delete(key);
+  }
+
+  isDown(key) {
+    return this.down.has(key);
+  }
+
+  wasJustPressed(key) {
+    return this.justPressed.has(key);
+  }
+
+  // À appeler une fois par frame, après que toute la logique du jeu
+  // a lu les entrées : réinitialise les touches "juste pressées".
+  endFrame() {
+    this.justPressed.clear();
+  }
+
+  // Construit un état d'entrée normalisé
+  // {left,right,jump,light,heavy,special,dodge} pour le joueur demandé,
+  // à partir de la table CONTROLS.
+  getState(playerControls) {
+    return {
+      left: this.isDown(playerControls.left),
+      right: this.isDown(playerControls.right),
+      jump: this.wasJustPressed(playerControls.jump),
+      light: this.wasJustPressed(playerControls.light),
+      heavy: this.wasJustPressed(playerControls.heavy),
+      special: this.wasJustPressed(playerControls.special),
+      dodge: this.wasJustPressed(playerControls.dodge),
+    };
+  }
+}
+
+</script>
+<script>
+/* fighter.js */
+/* =========================================================================
+   fighter.js — Classe générique représentant un combattant (Sausage,
+   Turkey, Pizza, Avocado, ou tout nouveau personnage). Toute la logique
+   de déplacement, saut, attaque, esquive et dégâts vit ici. Le rendu
+   visuel (la forme du personnage) est délégué à `config.draw(ctx,
+   fighter)`, défini dans characters.js — c'est ce qui permet d'ajouter un
+   nouveau personnage sans toucher à cette classe.
+
+   Attaques : `light` et `heavy` sont communes à tous les personnages
+   (voir ATTACKS dans constants.js). `special` est PROPRE à chaque
+   personnage : sa définition vit dans `config.special` (characters.js) et
+   peut être de trois natures (`kind`) :
+     - 'melee'             : un coup classique dans la direction du regard.
+     - 'melee_both_sides'  : touche des deux côtés à la fois (ex: Turkey).
+     - 'projectile'        : lance un projectile (géré par Game/Combat,
+                              voir shouldSpawnProjectile()).
+   Options supplémentaires possibles sur la définition d'une attaque :
+     - unblockable: true   : traverse l'esquive (ex: Burger).
+     - slow: {factor, duration} : ralentit la victime (ex: Ice Cream).
+   ========================================================================= */
+
+class Fighter {
+  constructor(config, playerLabel, startX, facing) {
+    this.config = config;         // voir characters.js
+    this.playerLabel = playerLabel; // "Joueur 1", "Joueur 2" ou "IA"
+    this.reset(startX, facing);
+  }
+
+  reset(startX, facing) {
+    this.x = startX;
+    this.h = 0;                 // hauteur au-dessus du sol (0 = au sol)
+    this.vx = 0;
+    this.vh = 0;
+    this.facing = facing;       // 1 = regarde à droite, -1 = à gauche
+    this.health = HEALTH_MAX;
+    this.state = 'idle';
+    this.stateTime = 0;
+    this.grounded = true;
+    this.currentAttack = null;  // { type, def, hitFlags:[], projectileSpawned }
+    this.attackHitboxActive = false;
+    this.invulnerable = false;
+    this.dodgeCooldown = 0;
+    this.specialCooldown = 0;
+    this.slowTimer = 0;         // durée restante du ralentissement (Ice Cream)
+    this.slowFactor = 1;        // multiplicateur de vitesse appliqué tant que slowTimer > 0
+    this.hitFlash = 0;          // fait clignoter le perso en rouge quand touché
+    this.animTime = 0;          // horloge locale pour les animations idle/walk
+    this.hurtDuration = 0.25;
+  }
+
+  get width() { return FIGHTER_WIDTH; }
+  get height() { return FIGHTER_HEIGHT; }
+  get bottom() { return FLOOR_Y - this.h; }
+  get top() { return this.bottom - this.height; }
+  get left() { return this.x - this.width / 2; }
+  get right() { return this.x + this.width / 2; }
+
+  get hurtbox() {
+    return { left: this.left, right: this.right, top: this.top, bottom: this.bottom };
+  }
+
+  speedMult() {
+    const base = this.config.stats.speedMult || 1;
+    return this.slowTimer > 0 ? base * this.slowFactor : base;
+  }
+  jumpMult() { return this.config.stats.jumpMult || 1; }
+
+  // Renvoie la définition de l'attaque demandée : les coups de base sont
+  // partagés (ATTACKS.light/heavy dans constants.js) tandis que le coup
+  // spécial est propre au personnage (this.config.special).
+  getAttackDef(type) {
+    return type === 'special' ? this.config.special : ATTACKS[type];
+  }
+
+  get specialCooldownRatio() {
+    const total = (this.config.special && this.config.special.cooldown) || 1;
+    return clamp(1 - this.specialCooldown / total, 0, 1);
+  }
+
+  isBusy() {
+    return (
+      this.state === 'lightAttack' ||
+      this.state === 'heavyAttack' ||
+      this.state === 'specialAttack' ||
+      this.state === 'dodge' ||
+      this.state === 'hurt' ||
+      this.state === 'win' ||
+      this.state === 'lose'
+    );
+  }
+
+  isDefeated() {
+    return this.health <= 0;
+  }
+
+  // ---- Déclencheurs d'actions -------------------------------------------
+
+  startAttack(type) {
+    const def = this.getAttackDef(type);
+    this.state = type === 'light' ? 'lightAttack' : type === 'heavy' ? 'heavyAttack' : 'specialAttack';
+    this.stateTime = 0;
+    const hitCount = def.kind === 'melee_both_sides' ? 2 : 1;
+    this.currentAttack = { type, def, hitFlags: new Array(hitCount).fill(false), projectileSpawned: false };
+    this.attackHitboxActive = false;
+    if (type === 'special') this.specialCooldown = def.cooldown;
+  }
+
+  startDodge() {
+    this.state = 'dodge';
+    this.stateTime = 0;
+    this.invulnerable = true;
+    this.vx = -this.facing * DODGE_SPEED; // pas en arrière, loin de l'adversaire
+    this.dodgeCooldown = DODGE_COOLDOWN;
+  }
+
+  // Appelé par le système de combat quand une attaque adverse touche.
+  // Retourne true si le coup a bien été encaissé (false si esquivé).
+  applyHit(attackerFacing, attackDef) {
+    // `unblockable` : l'attaque traverse l'esquive (spécial de Burger).
+    if (this.invulnerable && !attackDef.unblockable) return false;
+    this.invulnerable = false;
+    this.health = clamp(this.health - attackDef.damage, 0, HEALTH_MAX);
+    // `slow` : ralentit la victime un moment (spécial d'Ice Cream).
+    if (attackDef.slow) {
+      this.slowFactor = attackDef.slow.factor;
+      this.slowTimer = attackDef.slow.duration;
+    }
+    const kb = attackDef.knockback * (this.config.stats.knockbackTakenMult || 1);
+    this.vx = attackerFacing * kb;
+    this.state = 'hurt';
+    this.stateTime = 0;
+    this.hurtDuration = attackDef.hitstun;
+    this.hitFlash = 0.15;
+    this.currentAttack = null;
+    this.attackHitboxActive = false;
+    return true;
+  }
+
+  setWin() { this.state = 'win'; this.stateTime = 0; }
+  setLose() { this.state = 'lose'; this.stateTime = 0; }
+
+  // Boîte(s) de dégâts actives de l'attaque en cours. Renvoie toujours un
+  // tableau (vide si aucun coup actif) pour traiter simplement les coups
+  // "double face" comme celui de Turkey. Les attaques de type projectile
+  // n'ont pas de hitbox de mêlée : voir shouldSpawnProjectile().
+  getAttackHitboxes() {
+    if (!this.attackHitboxActive || !this.currentAttack) return [];
+    const def = this.currentAttack.def;
+    if (def.kind === 'projectile') return [];
+
+    const midY = (this.top + this.bottom) / 2;
+    const bandHalf = this.height * 0.28;
+
+    if (def.kind === 'melee_both_sides') {
+      return [
+        { index: 0, facingSign: 1, rect: { left: this.right, right: this.right + def.range, top: midY - bandHalf, bottom: midY + bandHalf } },
+        { index: 1, facingSign: -1, rect: { left: this.left - def.range, right: this.left, top: midY - bandHalf, bottom: midY + bandHalf } },
+      ];
+    }
+
+    if (this.facing === 1) {
+      return [{ index: 0, facingSign: 1, rect: { left: this.right, right: this.right + def.range, top: midY - bandHalf, bottom: midY + bandHalf } }];
+    }
+    return [{ index: 0, facingSign: -1, rect: { left: this.left - def.range, right: this.left, top: midY - bandHalf, bottom: midY + bandHalf } }];
+  }
+
+  // ---- Attaques à projectile (ex: le noyau d'Avocado) --------------------
+
+  shouldSpawnProjectile() {
+    return !!(
+      this.currentAttack &&
+      this.currentAttack.def.kind === 'projectile' &&
+      this.attackHitboxActive &&
+      !this.currentAttack.projectileSpawned
+    );
+  }
+
+  markProjectileSpawned() {
+    if (this.currentAttack) this.currentAttack.projectileSpawned = true;
+  }
+
+  getProjectileSpawnPoint() {
+    return {
+      x: this.facing === 1 ? this.right : this.left,
+      h: this.h + this.height * 0.42,
+    };
+  }
+
+  // ---- Boucle de mise à jour ---------------------------------------------
+
+  // NB : `animTime` est incrémenté par Game.update() à chaque frame, même
+  // hors combat (menu, décompte, victoire), pour que les animations idle
+  // et win/lose restent vivantes sur les écrans de menu et de fin.
+  update(dt, input, arena, opponent) {
+    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
+    if (this.dodgeCooldown > 0) this.dodgeCooldown = Math.max(0, this.dodgeCooldown - dt);
+    if (this.specialCooldown > 0) this.specialCooldown = Math.max(0, this.specialCooldown - dt);
+    if (this.slowTimer > 0) {
+      this.slowTimer = Math.max(0, this.slowTimer - dt);
+      if (this.slowTimer === 0) this.slowFactor = 1;
+    }
+
+    // Se tourne automatiquement vers l'adversaire (plus lisible, comme
+    // dans la plupart des jeux de combat 2D grand public).
+    if (!this.isBusy() && opponent) {
+      this.facing = opponent.x >= this.x ? 1 : -1;
+    }
+
+    this.stateTime += dt;
+
+    switch (this.state) {
+      case 'idle':
+      case 'walk':
+      case 'jump':
+        this.handleGroundControl(dt, input, arena);
+        break;
+      case 'lightAttack':
+      case 'heavyAttack':
+      case 'specialAttack':
+        this.handleAttackState(dt);
+        break;
+      case 'dodge':
+        this.handleDodgeState(dt);
+        break;
+      case 'hurt':
+        this.handleHurtState(dt, arena);
+        break;
+      case 'win':
+      case 'lose':
+        this.vx = approach(this.vx, 0, GROUND_GRIP, dt);
+        break;
+    }
+
+    this.applyPhysics(dt, arena);
+  }
+
+  handleGroundControl(dt, input, arena) {
+    const surface = arena.getSurfaceAt(this.x);
+    const grip = this.grounded ? (surface.oily ? OIL_GRIP : GROUND_GRIP) : AIR_GRIP;
+
+    let targetVx = 0;
+    let moving = false;
+    if (input.left && !input.right) { targetVx = -MOVE_SPEED * this.speedMult(); moving = true; }
+    else if (input.right && !input.left) { targetVx = MOVE_SPEED * this.speedMult(); moving = true; }
+    if (!this.grounded) targetVx *= AIR_MOVE_FACTOR;
+
+    this.vx = approach(this.vx, targetVx, grip, dt);
+    this.state = moving && this.grounded ? 'walk' : (this.grounded ? 'idle' : this.state);
+
+    if (input.jump && this.grounded) {
+      this.vh = JUMP_FORCE * this.jumpMult();
+      this.grounded = false;
+      this.state = 'jump';
+      return;
+    }
+
+    if (this.grounded) {
+      if (input.dodge && this.dodgeCooldown <= 0) { this.startDodge(); return; }
+      if (input.light) { this.startAttack('light'); return; }
+      if (input.heavy) { this.startAttack('heavy'); return; }
+      if (input.special && this.specialCooldown <= 0) { this.startAttack('special'); return; }
+    }
+
+    if (!this.grounded) this.state = 'jump';
+  }
+
+  handleAttackState(dt) {
+    const def = this.currentAttack.def;
+
+    if (def.lunge && this.stateTime < def.startup) {
+      this.vx = approach(this.vx, this.facing * def.lunge, 14, dt);
+    } else {
+      this.vx = approach(this.vx, 0, GROUND_GRIP, dt);
+    }
+
+    const activeStart = def.startup;
+    const activeEnd = def.startup + def.active;
+    const totalDuration = activeEnd + def.recovery;
+
+    this.attackHitboxActive = this.stateTime >= activeStart && this.stateTime < activeEnd;
+
+    if (this.stateTime >= totalDuration) {
+      this.state = 'idle';
+      this.currentAttack = null;
+      this.attackHitboxActive = false;
+    }
+  }
+
+  handleDodgeState(dt) {
+    this.vx = approach(this.vx, 0, 6, dt);
+    if (this.stateTime >= DODGE_DURATION) {
+      this.state = 'idle';
+      this.invulnerable = false;
+    }
+  }
+
+  handleHurtState(dt, arena) {
+    const surface = arena.getSurfaceAt(this.x);
+    const grip = this.grounded ? (surface.oily ? OIL_GRIP * 0.6 : GROUND_GRIP * 0.5) : AIR_GRIP;
+    this.vx = approach(this.vx, 0, grip, dt);
+    if (this.stateTime >= this.hurtDuration) {
+      this.state = 'idle';
+    }
+  }
+
+  applyPhysics(dt, arena) {
+    // Gravité + saut
+    if (!this.grounded || this.h > 0) this.vh -= GRAVITY * dt;
+    this.h += this.vh * dt;
+    if (this.h <= 0) {
+      this.h = 0;
+      this.vh = 0;
+      if (!this.grounded) {
+        this.grounded = true;
+        if (this.state === 'jump') this.state = 'idle';
+      }
+    } else {
+      this.grounded = false;
+    }
+
+    // Déplacement horizontal + murs du plateau
+    this.x += this.vx * dt;
+    const minX = PAN_LEFT + this.width / 2;
+    const maxX = PAN_RIGHT - this.width / 2;
+    this.x = clamp(this.x, minX, maxX);
+
+    // Obstacles statiques (bloquent au sol, franchissables en sautant)
+    arena.resolveObstacleCollision(this);
+  }
+
+  draw(ctx) {
+    drawContactShadow(ctx, this.x, FLOOR_Y + 6, this.h, this.width * 0.62);
+    this.config.draw(ctx, this);
+  }
+}
+
+</script>
+<script>
+/* characters.js */
+/* =========================================================================
+   characters.js — Apparence, statistiques ET attaque spéciale de chaque
+   personnage.
+
+   Roster actuel :
+     🌭 Sausage  — agile, spécial "Roulade Grillée" (charge en avant)
+     🦃 Turkey   — costaud, spécial "Tourbillon de Plumes" (frappe des 2 côtés)
+     🍕 Pizza    — élastique, spécial "Fouet de Fromage" (très longue portée)
+     🥑 Avocado  — robuste, spécial "Noyau Explosif" (projectile à distance)
+     🍔 Burger   — bourrin, spécial "Smash Giga-Burger" (traverse l'esquive)
+     🍨 Ice Cream— contrôle, spécial "Coup de Froid" (ralentit l'adversaire)
+
+   C'est LE fichier à modifier pour :
+     - changer les couleurs / proportions d'un personnage (voir COLORS
+       dans constants.js pour les couleurs, et les valeurs ci-dessous pour
+       les proportions) ;
+     - équilibrer un personnage (vitesse, saut, résistance au recul,
+       attaque spéciale) ;
+     - AJOUTER un nouveau personnage : voir le guide complet tout en bas
+       du fichier.
+   ========================================================================= */
+
+// ---- Aide : expression du visage selon l'état du combattant --------------
+function moodFromState(state) {
+  if (state === 'lightAttack' || state === 'heavyAttack' || state === 'specialAttack') return 'attack';
+  if (state === 'hurt') return 'hurt';
+  if (state === 'win') return 'win';
+  if (state === 'lose') return 'lose';
+  return 'normal';
+}
+
+// Dessine une paire d'yeux expressifs. Partagé par tous les personnages
+// pour que chacun ait des émotions cohérentes et lisibles.
+function drawEyes(ctx, cx, cy, gap, r, mood) {
+  const sides = [-1, 1];
+  for (const side of sides) {
+    const ex = cx + side * gap / 2;
+    const ey = cy;
+
+    if (mood === 'win') {
+      ctx.strokeStyle = '#2b2320';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(ex - r, ey + r * 0.3);
+      ctx.quadraticCurveTo(ex, ey - r * 1.1, ex + r, ey + r * 0.3);
+      ctx.stroke();
+      continue;
+    }
+    if (mood === 'lose') {
+      ctx.strokeStyle = '#2b2320';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(ex - r * 0.7, ey - r * 0.7);
+      ctx.lineTo(ex + r * 0.7, ey + r * 0.7);
+      ctx.moveTo(ex + r * 0.7, ey - r * 0.7);
+      ctx.lineTo(ex - r * 0.7, ey + r * 0.7);
+      ctx.stroke();
+      continue;
+    }
+
+    // Blanc de l'œil
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, r, mood === 'hurt' ? r * 1.15 : r, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#2b2320';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Pupille
+    const pr = mood === 'attack' ? r * 0.42 : r * 0.55;
+    ctx.fillStyle = '#241f1a';
+    ctx.beginPath();
+    ctx.arc(ex, ey, pr, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sourcil froncé pendant l'attaque (regard déterminé)
+    if (mood === 'attack') {
+      ctx.strokeStyle = '#2b2320';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (side < 0) { ctx.moveTo(ex - r, ey - r * 1.2); ctx.lineTo(ex + r, ey - r * 1.9); }
+      else { ctx.moveTo(ex - r, ey - r * 1.9); ctx.lineTo(ex + r, ey - r * 1.2); }
+      ctx.stroke();
+    }
+  }
+}
+
+function drawMouth(ctx, cx, cy, w, mood) {
+  ctx.strokeStyle = '#2b2320';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  if (mood === 'attack') {
+    ctx.fillStyle = '#5c2620';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, w * 0.5, w * 0.45, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (mood === 'hurt') {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, w * 0.3, w * 0.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (mood === 'win') {
+    ctx.beginPath();
+    ctx.arc(cx, cy - w * 0.15, w * 0.55, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+  } else if (mood === 'lose') {
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.35, cy);
+    ctx.lineTo(cx + w * 0.35, cy);
+    ctx.stroke();
+  } else if (mood !== 'hidden') {
+    ctx.beginPath();
+    ctx.arc(cx, cy - w * 0.12, w * 0.45, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+  }
+}
+
+// Halo rouge qui apparaît une fraction de seconde quand un personnage est
+// touché (dégradé radial doux, centré sur (x, y), de rayons rx/ry).
+function drawHitGlow(ctx, x, y, rx, ry, t) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1, ry / rx);
+  const g = ctx.createRadialGradient(0, 0, rx * 0.15, 0, 0, rx);
+  g.addColorStop(0, `rgba(255,70,50,${0.6 * t})`);
+  g.addColorStop(1, 'rgba(255,70,50,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, rx, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Calcule le décalage (dx, dy) du membre d'attaque (bras/aile/pince) selon
+// la phase précise de l'attaque en cours. dx > 0 = vers l'avant (l'axe est
+// déjà orienté par ctx.scale(facing,1)). Fonctionne pour N'IMPORTE QUELLE
+// attaque de mêlée (légère, lourde OU spéciale) car tout est dérivé de
+// `def` : un nouveau personnage n'a donc rien à coder ici.
+function getLimbOffset(f) {
+  const atk = f.currentAttack;
+  if (atk && atk.def.kind !== 'projectile') {
+    const def = atk.def;
+    const t = f.stateTime;
+    const isSpecial = atk.type === 'special';
+    const isHeavyLike = atk.type === 'heavy' || isSpecial;
+    if (t < def.startup) {
+      return isHeavyLike ? { dx: -20 - (def.lunge || 0) * 0.04, dy: -16 } : { dx: -8, dy: -4 };
+    }
+    if (t < def.startup + def.active) {
+      if (isSpecial) return { dx: 26 + def.range * 0.55, dy: -8 };
+      return isHeavyLike ? { dx: 68, dy: -10 } : { dx: 48, dy: 2 };
+    }
+    return { dx: 22, dy: 4 };
+  }
+  if (atk && atk.def.kind === 'projectile') {
+    const def = atk.def;
+    const t = f.stateTime;
+    if (t < def.startup) return { dx: -16, dy: -12 };
+    return { dx: 36, dy: -6 };
+  }
+  switch (f.state) {
+    case 'walk': return { dx: 24, dy: 8 + Math.sin(f.animTime * 14) * 5 };
+    case 'hurt': return { dx: 12, dy: 22 };
+    case 'win': return { dx: 8, dy: -42 };
+    case 'lose': return { dx: 28, dy: 18 };
+    case 'dodge': return { dx: -18, dy: 10 };
+    default: return { dx: 20, dy: 6 + Math.sin(f.animTime * 4) * 2 };
+  }
+}
+
+/* =========================================================================
+   SAUSAGE — courageuse et agile
+   Spécial : "Roulade Grillée" — charge en boule vers l'avant.
+   ========================================================================= */
+function drawSausage(ctx, f) {
+  const c = f.config.colors;
+  const mood = moodFromState(f.state);
+  const isRolling = f.state === 'specialAttack';
+
+  ctx.save();
+  ctx.translate(f.x, f.bottom);
+
+  // Traînée de mouvement pendant la roulade (avant le flip de facing, en
+  // repère écran, pour rester derrière le personnage quel que soit le sens).
+  if (isRolling) {
+    for (let i = 1; i <= 3; i++) {
+      ctx.globalAlpha = 0.16 * (4 - i) / 3;
+      ctx.fillStyle = c.body;
+      ctx.beginPath();
+      ctx.ellipse(-f.facing * i * 16, -46, 26, 40, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.scale(f.facing, 1);
+
+  let sx = 1, sy = 1;
+  if (!f.grounded) {
+    if (f.vh > 50) { sx = 0.92; sy = 1.1; }
+    else if (f.vh < -50) { sx = 1.08; sy = 0.9; }
+  }
+  if (f.state === 'lose') sy = 0.55;
+  if (isRolling) { sx = 1.12; sy = 0.85; } // s'aplatit en boule pour la roulade
+  ctx.scale(sx, sy);
+
+  let shakeX = 0;
+  if (f.state === 'hurt') shakeX = Math.sin(f.stateTime * 100) * 3;
+  let bob = 0;
+  if (f.state === 'idle') bob = Math.sin(f.animTime * 4) * 2;
+  if (f.state === 'walk') bob = Math.abs(Math.sin(f.animTime * 14)) * 5;
+  if (f.state === 'win') bob = Math.abs(Math.sin(f.animTime * 8)) * 16;
+  ctx.translate(shakeX, -bob);
+
+  const spin = isRolling ? f.stateTime * 22 : 0;
+  ctx.save();
+  ctx.rotate(spin);
+
+  const bodyW = 50;
+  const bodyH = f.state === 'lose' ? 58 : 92;
+  const bodyBottomY = -16;
+  const bodyTopY = bodyBottomY - bodyH;
+
+  if (f.hitFlash > 0) {
+    drawHitGlow(ctx, 0, bodyTopY + bodyH / 2, bodyW * 1.1, bodyH * 0.7, f.hitFlash / 0.15);
+  }
+
+  // Jambes + pieds
+  const legSwing = f.state === 'walk' ? Math.sin(f.animTime * 14) * 12 : 0;
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 9;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-13, 0); ctx.lineTo(-13 + legSwing * 0.5, bodyBottomY + 10);
+  ctx.moveTo(13, 0); ctx.lineTo(13 - legSwing * 0.5, bodyBottomY + 10);
+  ctx.stroke();
+  ctx.fillStyle = c.bodyDark;
+  ctx.beginPath(); ctx.ellipse(-13 + legSwing * 0.5, bodyBottomY + 10, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(13 - legSwing * 0.5, bodyBottomY + 10, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Bras arrière (discret, juste pour la silhouette)
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(-6, bodyTopY + bodyH * 0.55); ctx.lineTo(-22, bodyTopY + bodyH * 0.75); ctx.stroke();
+
+  // Corps (capsule arrondie façon saucisse)
+  const grad = ctx.createLinearGradient(0, bodyTopY, 0, bodyBottomY);
+  grad.addColorStop(0, c.body);
+  grad.addColorStop(1, c.bodyDark);
+  ctx.fillStyle = grad;
+  pathRoundedRect(ctx, -bodyW / 2, bodyTopY, bodyW, bodyH, 24);
+  ctx.fill();
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Marques de grill
+  ctx.strokeStyle = c.grill;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const gy = bodyTopY + bodyH * 0.35 + i * bodyH * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(-bodyW / 2 + 8, gy + 8);
+    ctx.lineTo(bodyW / 2 - 8, gy - 8);
+    ctx.stroke();
+  }
+
+  // Reflet brillant
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  ctx.beginPath();
+  ctx.ellipse(-bodyW * 0.2, bodyTopY + bodyH * 0.3, bodyW * 0.16, bodyH * 0.2, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bras avant / gant de boxe (membre d'attaque)
+  const pivot = { x: bodyW / 2 - 6, y: bodyTopY + bodyH * 0.55 };
+  const off = getLimbOffset(f);
+  const glove = { x: pivot.x + off.dx, y: pivot.y + off.dy };
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 9;
+  ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(glove.x, glove.y); ctx.stroke();
+  ctx.fillStyle = c.glove;
+  ctx.beginPath(); ctx.arc(glove.x, glove.y, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = c.bodyDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Visage
+  const eyesY = bodyTopY + bodyH * 0.3;
+  drawEyes(ctx, 4, eyesY, 20, 9, mood);
+  drawMouth(ctx, 4, eyesY + 22, 20, mood);
+
+  ctx.restore(); // rotation roulade
+  ctx.restore(); // scale/translate facing
+}
+
+/* =========================================================================
+   TURKEY — drôle mais redoutable
+   Spécial : "Tourbillon de Plumes" — frappe des deux côtés à la fois.
+   ========================================================================= */
+function drawTurkey(ctx, f) {
+  const c = f.config.colors;
+  const mood = moodFromState(f.state);
+  const isWhirl = f.state === 'specialAttack';
+
+  ctx.save();
+  ctx.translate(f.x, f.bottom);
+
+  if (isWhirl) {
+    const r = 58 + Math.sin(f.stateTime * 40) * 4;
+    ctx.strokeStyle = `rgba(230,126,34,${0.5 + Math.sin(f.stateTime * 30) * 0.2})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(0, -46, r, r * 0.55, f.stateTime * 12, 0, Math.PI * 1.6);
+    ctx.stroke();
+  }
+
+  ctx.scale(f.facing, 1);
+
+  let sx = 1, sy = 1;
+  if (!f.grounded) {
+    if (f.vh > 50) { sx = 0.93; sy = 1.08; }
+    else if (f.vh < -50) { sx = 1.07; sy = 0.91; }
+  }
+  if (f.state === 'lose') sy = 0.55;
+  ctx.scale(sx, sy);
+
+  let shakeX = 0;
+  if (f.state === 'hurt') shakeX = Math.sin(f.stateTime * 100) * 3;
+  let bob = 0;
+  if (f.state === 'idle') bob = Math.sin(f.animTime * 3.6) * 2;
+  if (f.state === 'walk') bob = Math.abs(Math.sin(f.animTime * 13)) * 5;
+  if (f.state === 'win') bob = Math.abs(Math.sin(f.animTime * 8)) * 16;
+  ctx.translate(shakeX, -bob);
+
+  const bodyW = 62;
+  const bodyH = f.state === 'lose' ? 54 : 78;
+  const bodyBottomY = -14;
+  const bodyCenterY = bodyBottomY - bodyH * 0.55;
+
+  if (f.hitFlash > 0) {
+    drawHitGlow(ctx, 0, bodyCenterY, bodyW, bodyH * 0.75, f.hitFlash / 0.15);
+  }
+
+  // Éventail de plumes (derrière le corps)
+  const fanSpread = f.state === 'win' ? 1.25 : f.state === 'lose' ? 0.55 : isWhirl ? 1.4 : 1;
+  const fanRotate = isWhirl ? Math.sin(f.stateTime * 30) * 0.25 : 0;
+  const featherColors = [c.feather1, c.feather2, c.feather3, c.feather2, c.feather1];
+  ctx.save();
+  ctx.translate(-bodyW * 0.25, bodyCenterY + 4);
+  ctx.rotate(fanRotate);
+  for (let i = 0; i < 5; i++) {
+    const angle = (-0.9 + i * 0.45) * fanSpread;
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.fillStyle = featherColors[i];
+    ctx.beginPath();
+    ctx.ellipse(0, -44, 15, 34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // Pattes + pieds
+  const legSwing = f.state === 'walk' ? Math.sin(f.animTime * 13) * 12 : 0;
+  ctx.strokeStyle = '#c97a2b';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-12, 0); ctx.lineTo(-12 + legSwing * 0.5, bodyBottomY + 8);
+  ctx.moveTo(12, 0); ctx.lineTo(12 - legSwing * 0.5, bodyBottomY + 8);
+  ctx.stroke();
+  ctx.fillStyle = '#e08a30';
+  ctx.beginPath(); ctx.ellipse(-12 + legSwing * 0.5, bodyBottomY + 9, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(12 - legSwing * 0.5, bodyBottomY + 9, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Corps (ovale dodu)
+  const grad = ctx.createRadialGradient(-10, bodyCenterY - 10, 6, 0, bodyCenterY, bodyW);
+  grad.addColorStop(0, c.body);
+  grad.addColorStop(1, c.bodyDark);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(0, bodyCenterY, bodyW * 0.5, bodyH * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Ventre clair
+  ctx.fillStyle = 'rgba(255,235,205,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(4, bodyCenterY + bodyH * 0.12, bodyW * 0.28, bodyH * 0.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ailes / membres d'attaque — les DEUX en même temps pendant le tourbillon
+  const off = getLimbOffset(f);
+  const drawWing = (mirror) => {
+    const pivot = { x: mirror * bodyW * 0.32, y: bodyCenterY + 4 };
+    const tip = { x: pivot.x + mirror * off.dx, y: pivot.y + off.dy };
+    ctx.strokeStyle = c.bodyDark;
+    ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+    ctx.fillStyle = c.bodyDark;
+    ctx.beginPath(); ctx.ellipse(tip.x, tip.y, 13, 9, mirror * off.dx * 0.01, 0, Math.PI * 2); ctx.fill();
+  };
+  if (isWhirl) { drawWing(1); drawWing(-1); } else { drawWing(1); }
+
+  // Tête
+  const headR = 22;
+  const headX = bodyW * 0.28;
+  const headY = bodyCenterY - bodyH * 0.42;
+  ctx.fillStyle = c.body;
+  ctx.beginPath(); ctx.arc(headX, headY, headR, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = c.bodyDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Caroncule (le petit truc rouge sous le bec)
+  ctx.fillStyle = c.wattle;
+  ctx.beginPath();
+  ctx.moveTo(headX + headR * 0.5, headY + headR * 0.3);
+  ctx.quadraticCurveTo(headX + headR * 0.65, headY + headR * 0.9, headX + headR * 0.4, headY + headR * 0.95);
+  ctx.quadraticCurveTo(headX + headR * 0.3, headY + headR * 0.6, headX + headR * 0.5, headY + headR * 0.3);
+  ctx.fill();
+
+  // Bec
+  ctx.fillStyle = c.beak;
+  ctx.beginPath();
+  ctx.moveTo(headX + headR * 0.7, headY - headR * 0.1);
+  ctx.lineTo(headX + headR * 1.5, headY + headR * 0.05);
+  ctx.lineTo(headX + headR * 0.7, headY + headR * 0.35);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#b9720f'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // Visage
+  drawEyes(ctx, headX - 2, headY - 4, 16, 7, mood);
+  drawMouth(ctx, headX - 2, headY + 14, 14, mood === 'normal' ? 'hidden' : mood);
+
+  ctx.restore();
+}
+
+/* =========================================================================
+   PIZZA — élastique et généreuse
+   Spécial : "Fouet de Fromage" — un bras de fromage filant à très longue
+   portée.
+   ========================================================================= */
+function drawPizza(ctx, f) {
+  const c = f.config.colors;
+  const mood = moodFromState(f.state);
+  const isWhip = f.state === 'specialAttack' && f.attackHitboxActive;
+
+  ctx.save();
+  ctx.translate(f.x, f.bottom);
+  ctx.scale(f.facing, 1);
+
+  let sx = 1, sy = 1;
+  if (!f.grounded) {
+    if (f.vh > 50) { sx = 0.9; sy = 1.14; }
+    else if (f.vh < -50) { sx = 1.12; sy = 0.88; }
+  }
+  if (f.state === 'lose') sy = 0.55;
+  ctx.scale(sx, sy);
+
+  let shakeX = 0;
+  if (f.state === 'hurt') shakeX = Math.sin(f.stateTime * 100) * 3;
+  let bob = 0;
+  if (f.state === 'idle') bob = Math.sin(f.animTime * 4.4) * 3;
+  if (f.state === 'walk') bob = Math.abs(Math.sin(f.animTime * 15)) * 6;
+  if (f.state === 'win') bob = Math.abs(Math.sin(f.animTime * 8)) * 16;
+  ctx.translate(shakeX, -bob);
+
+  const bottomY = -14;
+  const topY = f.state === 'lose' ? bottomY - 46 : bottomY - 96;
+  const halfW = 46;
+
+  if (f.hitFlash > 0) {
+    drawHitGlow(ctx, 0, (topY + bottomY) / 2, halfW * 1.3, 55, f.hitFlash / 0.15);
+  }
+
+  // Jambes (croûte)
+  const legSwing = f.state === 'walk' ? Math.sin(f.animTime * 15) * 10 : 0;
+  ctx.strokeStyle = c.crustDark;
+  ctx.lineWidth = 9;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-12, 0); ctx.lineTo(-12 + legSwing * 0.5, bottomY + 8);
+  ctx.moveTo(12, 0); ctx.lineTo(12 - legSwing * 0.5, bottomY + 8);
+  ctx.stroke();
+  ctx.fillStyle = c.crustDark;
+  ctx.beginPath(); ctx.ellipse(-12 + legSwing * 0.5, bottomY + 9, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(12 - legSwing * 0.5, bottomY + 9, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Corps triangulaire (part de pizza), coins arrondis
+  const points = [
+    { x: 0, y: topY },
+    { x: -halfW, y: bottomY },
+    { x: halfW, y: bottomY },
+  ];
+  const grad = ctx.createLinearGradient(0, topY, 0, bottomY);
+  grad.addColorStop(0, c.body);
+  grad.addColorStop(1, c.bodyDark);
+  ctx.fillStyle = grad;
+  pathRoundedPolygon(ctx, points, 16);
+  ctx.fill();
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Croûte épaisse le long de la base
+  ctx.fillStyle = c.crust;
+  pathRoundedRect(ctx, -halfW - 4, bottomY - 10, halfW * 2 + 8, 18, 9);
+  ctx.fill();
+  ctx.strokeStyle = c.crustDark;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Garnitures (pepperoni + basilic)
+  ctx.fillStyle = c.pepperoni;
+  const pepperoni = [[-14, topY + 46], [10, topY + 34], [2, topY + 66]];
+  for (const [px, py] of pepperoni) {
+    ctx.beginPath(); ctx.arc(px, py, 6.5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = c.basil;
+  ctx.beginPath();
+  ctx.ellipse(-22, topY + 68, 6, 4, 0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Petits filaments de fromage qui pendent sous la croûte
+  ctx.strokeStyle = c.body;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 16, bottomY - 2);
+    ctx.lineTo(i * 16, bottomY + 4 + Math.abs(Math.sin(f.animTime * 3 + i)) * 3);
+    ctx.stroke();
+  }
+
+  // Bras élastique en fromage (membre d'attaque)
+  const pivot = { x: halfW * 0.5, y: topY + 60 };
+  const off = getLimbOffset(f);
+  const tip = { x: pivot.x + off.dx, y: pivot.y + off.dy };
+  const midX = (pivot.x + tip.x) / 2;
+  const sag = isWhip ? 10 : 4;
+  ctx.strokeStyle = c.body;
+  ctx.lineWidth = isWhip ? 7 : 9;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x, pivot.y);
+  ctx.quadraticCurveTo(midX, Math.max(pivot.y, tip.y) + sag, tip.x, tip.y);
+  ctx.stroke();
+  // petites gouttes de fromage le long du fouet
+  if (isWhip) {
+    ctx.fillStyle = c.body;
+    for (let i = 0.25; i < 1; i += 0.25) {
+      const dx = pivot.x + (tip.x - pivot.x) * i;
+      const dy = pivot.y + (tip.y - pivot.y) * i + sag * Math.sin(i * Math.PI) + 5;
+      ctx.beginPath(); ctx.arc(dx, dy, 2.4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.fillStyle = c.body;
+  ctx.beginPath(); ctx.arc(tip.x, tip.y, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = c.bodyDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Visage
+  const eyesY = topY + 70;
+  drawEyes(ctx, 2, eyesY, 20, 9, mood);
+  drawMouth(ctx, 2, eyesY + 22, 20, mood);
+
+  ctx.restore();
+}
+
+/* =========================================================================
+   AVOCADO — zen mais a un noyau très dur
+   Spécial : "Noyau Explosif" — envoie son noyau comme projectile.
+   ========================================================================= */
+function drawAvocado(ctx, f) {
+  const c = f.config.colors;
+  const mood = moodFromState(f.state);
+  const isThrow = f.state === 'specialAttack';
+  const throwProgress = isThrow && f.currentAttack ? clamp(f.stateTime / f.currentAttack.def.startup, 0, 1) : 0;
+  const pitScale = isThrow ? clamp(1 - throwProgress, 0.15, 1) * (f.attackHitboxActive || f.stateTime > (f.currentAttack ? f.currentAttack.def.startup : 0) ? 0.15 : 1) : 1;
+
+  ctx.save();
+  ctx.translate(f.x, f.bottom);
+  ctx.scale(f.facing, 1);
+
+  let sx = 1, sy = 1;
+  if (!f.grounded) {
+    if (f.vh > 50) { sx = 0.93; sy = 1.08; }
+    else if (f.vh < -50) { sx = 1.07; sy = 0.91; }
+  }
+  if (f.state === 'lose') sy = 0.55;
+  ctx.scale(sx, sy);
+
+  let shakeX = 0;
+  if (f.state === 'hurt') shakeX = Math.sin(f.stateTime * 100) * 3;
+  let bob = 0;
+  if (f.state === 'idle') bob = Math.sin(f.animTime * 3.2) * 2;
+  if (f.state === 'walk') bob = Math.abs(Math.sin(f.animTime * 12)) * 4;
+  if (f.state === 'win') bob = Math.abs(Math.sin(f.animTime * 8)) * 16;
+  ctx.translate(shakeX, -bob);
+
+  const bodyW = 58;
+  const bodyH = f.state === 'lose' ? 56 : 96;
+  const bodyBottomY = -16;
+  const bodyTopY = bodyBottomY - bodyH;
+  const bodyCenterY = (bodyTopY + bodyBottomY) / 2;
+
+  if (f.hitFlash > 0) {
+    drawHitGlow(ctx, 0, bodyCenterY, bodyW * 1.05, bodyH * 0.6, f.hitFlash / 0.15);
+  }
+
+  // Jambes + pieds
+  const legSwing = f.state === 'walk' ? Math.sin(f.animTime * 12) * 10 : 0;
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 9;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-14, 0); ctx.lineTo(-14 + legSwing * 0.5, bodyBottomY + 10);
+  ctx.moveTo(14, 0); ctx.lineTo(14 - legSwing * 0.5, bodyBottomY + 10);
+  ctx.stroke();
+  ctx.fillStyle = c.bodyDark;
+  ctx.beginPath(); ctx.ellipse(-14 + legSwing * 0.5, bodyBottomY + 10, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14 - legSwing * 0.5, bodyBottomY + 10, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Bras arrière discret
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(-8, bodyCenterY + 6); ctx.lineTo(-26, bodyCenterY + 26); ctx.stroke();
+
+  // Corps (forme de poire / avocat entier)
+  const grad = ctx.createLinearGradient(0, bodyTopY, 0, bodyBottomY);
+  grad.addColorStop(0, c.body);
+  grad.addColorStop(1, c.bodyDark);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(0, bodyTopY);
+  ctx.bezierCurveTo(bodyW * 0.55, bodyTopY, bodyW * 0.62, bodyBottomY - bodyH * 0.15, bodyW * 0.42, bodyBottomY);
+  ctx.bezierCurveTo(bodyW * 0.2, bodyBottomY + 8, -bodyW * 0.2, bodyBottomY + 8, -bodyW * 0.42, bodyBottomY);
+  ctx.bezierCurveTo(-bodyW * 0.62, bodyBottomY - bodyH * 0.15, -bodyW * 0.55, bodyTopY, 0, bodyTopY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Chair claire (anneau) + noyau central
+  ctx.fillStyle = c.flesh;
+  ctx.beginPath();
+  ctx.ellipse(0, bodyCenterY + 6, bodyW * 0.4, bodyH * 0.33, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(0, bodyCenterY + 6);
+  ctx.scale(pitScale, pitScale);
+  const pitGrad = ctx.createRadialGradient(-6, -6, 4, 0, 0, bodyW * 0.24);
+  pitGrad.addColorStop(0, c.pit);
+  pitGrad.addColorStop(1, c.pitDark);
+  ctx.fillStyle = pitGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, bodyW * 0.24, bodyH * 0.19, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(-4, -4, bodyW * 0.12, bodyH * 0.08, -0.4, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Reflet brillant sur la peau
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(-bodyW * 0.28, bodyTopY + bodyH * 0.22, bodyW * 0.14, bodyH * 0.16, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bras avant (membre d'attaque / lancer)
+  const pivot = { x: bodyW * 0.42, y: bodyCenterY - 4 };
+  const off = getLimbOffset(f);
+  const hand = { x: pivot.x + off.dx, y: pivot.y + off.dy };
+  ctx.strokeStyle = c.bodyDark;
+  ctx.lineWidth = 9;
+  ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(hand.x, hand.y); ctx.stroke();
+  ctx.fillStyle = c.body;
+  ctx.beginPath(); ctx.arc(hand.x, hand.y, 12, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = c.bodyDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Visage
+  const eyesY = bodyTopY + bodyH * 0.26;
+  drawEyes(ctx, 0, eyesY, 20, 9, mood);
+  drawMouth(ctx, 0, eyesY + 22, 20, mood);
+
+  ctx.restore();
+}
+
+/* =========================================================================
+   BURGER — le bourrin de la bande
+   Spécial : "Smash Giga-Burger" — coup surpuissant qui TRAVERSE l'esquive.
+   ========================================================================= */
+function drawBurger(ctx, f) {
+  const c = f.config.colors;
+  const mood = moodFromState(f.state);
+  const isSmash = f.state === 'specialAttack';
+
+  ctx.save();
+  ctx.translate(f.x, f.bottom);
+  ctx.scale(f.facing, 1);
+
+  let sx = 1, sy = 1;
+  if (!f.grounded) {
+    if (f.vh > 50) { sx = 0.94; sy = 1.07; }
+    else if (f.vh < -50) { sx = 1.07; sy = 0.92; }
+  }
+  if (f.state === 'lose') sy = 0.55;
+  if (isSmash && f.currentAttack) {
+    // Écrasement théâtral : se tasse pendant la préparation, s'étire à l'impact
+    const prep = clamp(f.stateTime / f.currentAttack.def.startup, 0, 1);
+    sy = f.attackHitboxActive ? 1.1 : 1 - prep * 0.14;
+    sx = f.attackHitboxActive ? 0.94 : 1 + prep * 0.1;
+  }
+  ctx.scale(sx, sy);
+
+  let shakeX = 0;
+  if (f.state === 'hurt') shakeX = Math.sin(f.stateTime * 100) * 3;
+  if (isSmash && !f.attackHitboxActive) shakeX = Math.sin(f.stateTime * 80) * 2;
+  let bob = 0;
+  if (f.state === 'idle') bob = Math.sin(f.animTime * 3) * 2;
+  if (f.state === 'walk') bob = Math.abs(Math.sin(f.animTime * 11)) * 4;
+  if (f.state === 'win') bob = Math.abs(Math.sin(f.animTime * 8)) * 16;
+  ctx.translate(shakeX, -bob);
+
+  const w = 70;
+  const squash = f.state === 'lose' ? 0.55 : 1;
+  const bottomY = -14;
+  const layerH = { bunBot: 16, tomato: 8, lettuce: 9, patty: 20, cheese: 8, bunTop: 34 };
+  const totalH = (layerH.bunBot + layerH.tomato + layerH.lettuce + layerH.patty + layerH.cheese + layerH.bunTop) * squash;
+  const yBunBotTop = bottomY - layerH.bunBot * squash;
+  const yTomatoTop = yBunBotTop - layerH.tomato * squash;
+  const yLettuceTop = yTomatoTop - layerH.lettuce * squash;
+  const yPattyTop = yLettuceTop - layerH.patty * squash;
+  const yCheeseTop = yPattyTop - layerH.cheese * squash;
+  const yBunTopTop = yCheeseTop - layerH.bunTop * squash;
+
+  if (f.hitFlash > 0) {
+    drawHitGlow(ctx, 0, bottomY - totalH / 2, w * 0.75, totalH * 0.62, f.hitFlash / 0.15);
+  }
+
+  // Jambes
+  const legSwing = f.state === 'walk' ? Math.sin(f.animTime * 11) * 9 : 0;
+  ctx.strokeStyle = c.bunDark;
+  ctx.lineWidth = 10;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-15, 0); ctx.lineTo(-15 + legSwing * 0.5, bottomY + 6);
+  ctx.moveTo(15, 0); ctx.lineTo(15 - legSwing * 0.5, bottomY + 6);
+  ctx.stroke();
+  ctx.fillStyle = c.bunDark;
+  ctx.beginPath(); ctx.ellipse(-15 + legSwing * 0.5, bottomY + 7, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(15 - legSwing * 0.5, bottomY + 7, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Bras arrière
+  ctx.strokeStyle = c.pattyDark;
+  ctx.lineWidth = 9;
+  ctx.beginPath(); ctx.moveTo(-w / 2 + 6, yPattyTop + 10); ctx.lineTo(-w / 2 - 12, yPattyTop + 28); ctx.stroke();
+
+  // Pain du bas
+  const gBun = ctx.createLinearGradient(0, yBunBotTop, 0, bottomY);
+  gBun.addColorStop(0, c.bun);
+  gBun.addColorStop(1, c.bunDark);
+  ctx.fillStyle = gBun;
+  pathRoundedRect(ctx, -w / 2, yBunBotTop, w, layerH.bunBot * squash, 8);
+  ctx.fill();
+  ctx.strokeStyle = c.bunDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Tomate
+  ctx.fillStyle = c.tomato;
+  pathRoundedRect(ctx, -w / 2 + 3, yTomatoTop, w - 6, layerH.tomato * squash, 4);
+  ctx.fill();
+
+  // Salade (bord ondulé)
+  ctx.fillStyle = c.lettuce;
+  ctx.beginPath();
+  ctx.moveTo(-w / 2 - 3, yTomatoTop);
+  ctx.lineTo(-w / 2 - 3, yLettuceTop + 4);
+  const waves = 7;
+  for (let i = 0; i <= waves; i++) {
+    const wx = -w / 2 - 3 + (i / waves) * (w + 6);
+    ctx.quadraticCurveTo(wx - 4, yLettuceTop - 3, wx, yLettuceTop + 4);
+  }
+  ctx.lineTo(w / 2 + 3, yTomatoTop);
+  ctx.closePath();
+  ctx.fill();
+
+  // Steak
+  const gP = ctx.createLinearGradient(0, yPattyTop, 0, yLettuceTop);
+  gP.addColorStop(0, c.patty);
+  gP.addColorStop(1, c.pattyDark);
+  ctx.fillStyle = gP;
+  pathRoundedRect(ctx, -w / 2 + 1, yPattyTop, w - 2, layerH.patty * squash, 9);
+  ctx.fill();
+  ctx.strokeStyle = c.pattyDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Fromage fondant (avec gouttes)
+  ctx.fillStyle = c.cheese;
+  pathRoundedRect(ctx, -w / 2 - 2, yCheeseTop, w + 4, layerH.cheese * squash, 3);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-w / 2 + 6, yPattyTop);
+  ctx.lineTo(-w / 2 + 18, yPattyTop);
+  ctx.lineTo(-w / 2 + 12, yPattyTop + 9 + Math.sin(f.animTime * 3) * 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(w / 2 - 20, yPattyTop);
+  ctx.lineTo(w / 2 - 8, yPattyTop);
+  ctx.lineTo(w / 2 - 14, yPattyTop + 12 + Math.cos(f.animTime * 3) * 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Pain du haut (dôme)
+  const gTop = ctx.createLinearGradient(0, yBunTopTop, 0, yCheeseTop);
+  gTop.addColorStop(0, c.bun);
+  gTop.addColorStop(1, c.bunDark);
+  ctx.fillStyle = gTop;
+  ctx.beginPath();
+  ctx.moveTo(-w / 2 - 2, yCheeseTop);
+  ctx.quadraticCurveTo(-w / 2 - 4, yBunTopTop - 2, 0, yBunTopTop);
+  ctx.quadraticCurveTo(w / 2 + 4, yBunTopTop - 2, w / 2 + 2, yCheeseTop);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = c.bunDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Graines de sésame
+  ctx.fillStyle = '#fff3d6';
+  const seeds = [[-20, 0.28], [-6, 0.12], [10, 0.22], [22, 0.4], [-28, 0.5]];
+  for (const [sxp, sy2] of seeds) {
+    ctx.beginPath();
+    ctx.ellipse(sxp, yBunTopTop + (yCheeseTop - yBunTopTop) * sy2 + 4, 3, 1.8, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Reflet
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(-14, yBunTopTop + 10, 10, 5, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bras avant / poing
+  const pivot = { x: w / 2 - 4, y: yPattyTop + 10 };
+  const off = getLimbOffset(f);
+  const fist = { x: pivot.x + off.dx, y: pivot.y + off.dy };
+  ctx.strokeStyle = c.pattyDark;
+  ctx.lineWidth = 11;
+  ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(fist.x, fist.y); ctx.stroke();
+  ctx.fillStyle = c.patty;
+  ctx.beginPath(); ctx.arc(fist.x, fist.y, isSmash ? 17 : 14, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = c.pattyDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Visage sur le pain du haut
+  const eyesY = yBunTopTop + (yCheeseTop - yBunTopTop) * 0.55;
+  drawEyes(ctx, 2, eyesY, 22, 8, mood);
+  drawMouth(ctx, 2, eyesY + 15, 18, mood);
+
+  ctx.restore();
+}
+
+/* =========================================================================
+   ICE CREAM — fraîche, un peu fondante
+   Spécial : "Coup de Froid" — touche et RALENTIT l'adversaire.
+   ========================================================================= */
+function drawIceCream(ctx, f) {
+  const c = f.config.colors;
+  const mood = moodFromState(f.state);
+  const isFrost = f.state === 'specialAttack';
+
+  ctx.save();
+  ctx.translate(f.x, f.bottom);
+
+  // Souffle glacé pendant le spécial
+  if (isFrost && f.attackHitboxActive) {
+    for (let i = 0; i < 6; i++) {
+      const fx = f.facing * (46 + i * 12);
+      const fy = -58 + Math.sin(f.stateTime * 30 + i) * 12;
+      ctx.fillStyle = `rgba(190,235,255,${0.55 - i * 0.07})`;
+      ctx.beginPath();
+      ctx.arc(fx, fy, 9 - i * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.scale(f.facing, 1);
+
+  let sx = 1, sy = 1;
+  if (!f.grounded) {
+    if (f.vh > 50) { sx = 0.93; sy = 1.08; }
+    else if (f.vh < -50) { sx = 1.08; sy = 0.9; }
+  }
+  if (f.state === 'lose') sy = 0.55;
+  ctx.scale(sx, sy);
+
+  let shakeX = 0;
+  if (f.state === 'hurt') shakeX = Math.sin(f.stateTime * 100) * 3;
+  let bob = 0;
+  if (f.state === 'idle') bob = Math.sin(f.animTime * 3.8) * 2.5;
+  if (f.state === 'walk') bob = Math.abs(Math.sin(f.animTime * 13)) * 5;
+  if (f.state === 'win') bob = Math.abs(Math.sin(f.animTime * 8)) * 16;
+  ctx.translate(shakeX, -bob);
+
+  const bottomY = -10;
+  const coneH = f.state === 'lose' ? 26 : 40;
+  const coneTopY = bottomY - coneH;
+  const scoopCY = coneTopY - 26;
+  const topScoopCY = scoopCY - 30;
+
+  if (f.hitFlash > 0) {
+    drawHitGlow(ctx, 0, (bottomY + topScoopCY) / 2, 46, 62, f.hitFlash / 0.15);
+  }
+
+  // Pieds
+  const legSwing = f.state === 'walk' ? Math.sin(f.animTime * 13) * 9 : 0;
+  ctx.fillStyle = c.coneDark;
+  ctx.beginPath(); ctx.ellipse(-8 + legSwing * 0.5, bottomY + 8, 9, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(8 - legSwing * 0.5, bottomY + 8, 9, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Cornet gaufré (triangle pointe en bas)
+  const cg = ctx.createLinearGradient(0, coneTopY, 0, bottomY);
+  cg.addColorStop(0, c.cone);
+  cg.addColorStop(1, c.coneDark);
+  ctx.fillStyle = cg;
+  pathRoundedPolygon(ctx, [
+    { x: -30, y: coneTopY },
+    { x: 30, y: coneTopY },
+    { x: 0, y: bottomY + 2 },
+  ], 6);
+  ctx.fill();
+  ctx.strokeStyle = c.coneDark; ctx.lineWidth = 2; ctx.stroke();
+  // Quadrillage gaufre
+  ctx.save();
+  pathRoundedPolygon(ctx, [
+    { x: -30, y: coneTopY },
+    { x: 30, y: coneTopY },
+    { x: 0, y: bottomY + 2 },
+  ], 6);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(120,70,20,0.45)';
+  ctx.lineWidth = 1.5;
+  for (let i = -40; i <= 40; i += 12) {
+    ctx.beginPath(); ctx.moveTo(i, coneTopY); ctx.lineTo(i + 28, bottomY + 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(i, coneTopY); ctx.lineTo(i - 28, bottomY + 2); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Bras arrière (gouttes de glace)
+  ctx.strokeStyle = c.scoopDark;
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-26, scoopCY + 4); ctx.lineTo(-40, scoopCY + 24); ctx.stroke();
+
+  // Boule du bas (vanille) avec bord fondant
+  const g1 = ctx.createRadialGradient(-8, scoopCY - 8, 4, 0, scoopCY, 36);
+  g1.addColorStop(0, c.vanilla);
+  g1.addColorStop(1, c.scoopDark);
+  ctx.fillStyle = g1;
+  ctx.beginPath();
+  ctx.ellipse(0, scoopCY, 34, 28, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = c.scoopDark; ctx.lineWidth = 2; ctx.stroke();
+  // gouttes qui fondent sur le cornet
+  ctx.fillStyle = c.vanilla;
+  const dripLen = 6 + Math.abs(Math.sin(f.animTime * 2)) * 5;
+  for (const dxp of [-22, -4, 16]) {
+    ctx.beginPath();
+    ctx.ellipse(dxp, scoopCY + 24 + dripLen / 2, 4.5, dripLen / 2 + 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Boule du haut (rose) + cerise
+  const g2 = ctx.createRadialGradient(-6, topScoopCY - 6, 3, 0, topScoopCY, 28);
+  g2.addColorStop(0, '#fff0f8');
+  g2.addColorStop(1, c.scoop);
+  ctx.fillStyle = g2;
+  ctx.beginPath();
+  ctx.ellipse(0, topScoopCY + 6, 26, 22, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = c.scoopDark; ctx.lineWidth = 2; ctx.stroke();
+
+  ctx.fillStyle = c.cherry;
+  ctx.beginPath(); ctx.arc(4, topScoopCY - 18, 8, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#4a7a2c'; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(4, topScoopCY - 25);
+  ctx.quadraticCurveTo(10, topScoopCY - 36, 16, topScoopCY - 34);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.arc(1.5, topScoopCY - 21, 2.2, 0, Math.PI * 2); ctx.fill();
+
+  // Bras avant (qui goutte comme de la glace fondue)
+  const pivot = { x: 28, y: scoopCY - 2 };
+  const off = getLimbOffset(f);
+  const hand = { x: pivot.x + off.dx, y: pivot.y + off.dy };
+  ctx.strokeStyle = c.scoopDark;
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x, pivot.y);
+  ctx.quadraticCurveTo((pivot.x + hand.x) / 2, Math.max(pivot.y, hand.y) + 5, hand.x, hand.y);
+  ctx.stroke();
+  ctx.fillStyle = isFrost ? '#cdeeff' : c.scoop;
+  ctx.beginPath(); ctx.arc(hand.x, hand.y, 12, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = c.scoopDark; ctx.lineWidth = 2; ctx.stroke();
+
+  // Visage sur la boule du bas
+  const eyesY = scoopCY - 4;
+  drawEyes(ctx, 0, eyesY, 22, 8.5, mood);
+  drawMouth(ctx, 0, eyesY + 19, 18, mood);
+
+  ctx.restore();
+}
+
+// Dessin custom du noyau projeté (utilisé par combat.js / game.js pour le
+// spécial d'Avocado). Une simple ellipse brune avec un reflet, qui tourne
+// sur elle-même en vol.
+function drawAvocadoPit(ctx, p) {
+  ctx.save();
+  ctx.translate(p.x, FLOOR_Y - p.h);
+  ctx.rotate(p.rotation);
+  const r = p.def.projectile.radius;
+  const grad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 2, 0, 0, r);
+  grad.addColorStop(0, COLORS.avocado.pit);
+  grad.addColorStop(1, COLORS.avocado.pitDark);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.25, -r * 0.2, r * 0.4, r * 0.18, -0.3, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---- Configurations exportées ------------------------------------------
+const SAUSAGE_CONFIG = {
+  id: 'sausage',
+  displayName: 'Sausage',
+  emoji: '🌭',
+  tagline: 'Courageuse et agile',
+  trait: 'Rapide · sa charge fonce sur l\'adversaire',
+  colors: COLORS.sausage,
+  stats: { speedMult: 1.15, jumpMult: 1.05, knockbackTakenMult: 1.05 },
+  draw: drawSausage,
+  special: {
+    label: 'Roulade Grillée',
+    icon: '🌀',
+    kind: 'melee',
+    damage: 12,
+    range: 50,
+    startup: 0.10,
+    active: 0.22,
+    recovery: 0.30,
+    knockback: 300,
+    hitstun: 0.35,
+    lunge: 480,
+    cooldown: 1.6,
+  },
+};
+
+const TURKEY_CONFIG = {
+  id: 'turkey',
+  displayName: 'Turkey',
+  emoji: '🦃',
+  tagline: 'Drôle mais redoutable',
+  trait: 'Costaud · son tourbillon frappe des 2 côtés',
+  colors: COLORS.turkey,
+  stats: { speedMult: 0.92, jumpMult: 0.95, knockbackTakenMult: 0.9 },
+  draw: drawTurkey,
+  special: {
+    label: 'Tourbillon de Plumes',
+    icon: '🌪️',
+    kind: 'melee_both_sides',
+    damage: 10,
+    range: 60,
+    startup: 0.15,
+    active: 0.18,
+    recovery: 0.32,
+    knockback: 260,
+    hitstun: 0.30,
+    lunge: 0,
+    cooldown: 2.0,
+  },
+};
+
+const PIZZA_CONFIG = {
+  id: 'pizza',
+  displayName: 'Pizza',
+  emoji: '🍕',
+  tagline: 'Fondante et élastique',
+  trait: 'Allonge extrême · fouet de fromage de 130 px',
+  colors: COLORS.pizza,
+  stats: { speedMult: 1.05, jumpMult: 1.15, knockbackTakenMult: 1.15 },
+  draw: drawPizza,
+  special: {
+    label: 'Fouet de Fromage',
+    icon: '🧀',
+    kind: 'melee',
+    damage: 9,
+    range: 130,
+    startup: 0.14,
+    active: 0.14,
+    recovery: 0.28,
+    knockback: 260,
+    hitstun: 0.30,
+    lunge: 0,
+    cooldown: 1.8,
+  },
+};
+
+const AVOCADO_CONFIG = {
+  id: 'avocado',
+  displayName: 'Avocado',
+  emoji: '🥑',
+  tagline: 'Zen, mais un noyau très dur',
+  trait: 'Tireur · lance son noyau à distance',
+  colors: COLORS.avocado,
+  stats: { speedMult: 0.85, jumpMult: 0.9, knockbackTakenMult: 0.85 },
+  draw: drawAvocado,
+  special: {
+    label: 'Noyau Explosif',
+    icon: '🌰',
+    kind: 'projectile',
+    damage: 14,
+    knockback: 320,
+    hitstun: 0.4,
+    startup: 0.18,
+    active: 0.10,
+    recovery: 0.35,
+    cooldown: 2.4,
+    projectile: { speed: 560, gravity: true, radius: 14, lifetime: 1.3, draw: drawAvocadoPit },
+  },
+};
+
+const BURGER_CONFIG = {
+  id: 'burger',
+  displayName: 'Burger',
+  emoji: '🍔',
+  tagline: 'Un bourrin à étages',
+  trait: 'Bourrin · coup final impossible à esquiver',
+  colors: COLORS.burger,
+  stats: { speedMult: 0.8, jumpMult: 0.85, knockbackTakenMult: 0.8 },
+  draw: drawBurger,
+  special: {
+    label: 'Smash Giga-Burger',
+    icon: '💥',
+    kind: 'melee',
+    unblockable: true,   // traverse l'esquive : sa force est son identité
+    damage: 20,
+    range: 66,
+    startup: 0.30,       // longue préparation = contrepartie à sa puissance
+    active: 0.14,
+    recovery: 0.45,
+    knockback: 480,
+    hitstun: 0.5,
+    lunge: 60,
+    cooldown: 2.8,
+  },
+};
+
+const ICECREAM_CONFIG = {
+  id: 'icecream',
+  displayName: 'Ice Cream',
+  emoji: '🍨',
+  tagline: 'Cool... et ça gèle',
+  trait: 'Contrôle · ralentit l\'adversaire de moitié',
+  colors: COLORS.icecream,
+  stats: { speedMult: 1.0, jumpMult: 1.0, knockbackTakenMult: 1.1 },
+  draw: drawIceCream,
+  special: {
+    label: 'Coup de Froid',
+    icon: '❄️',
+    kind: 'melee',
+    damage: 7,
+    range: 64,
+    startup: 0.12,
+    active: 0.12,
+    recovery: 0.26,
+    knockback: 180,
+    hitstun: 0.28,
+    lunge: 0,
+    cooldown: 2.0,
+    slow: { factor: 0.5, duration: 2.8 },  // ralentit la victime de moitié
+  },
+};
+
+const CHARACTERS = {
+  sausage: SAUSAGE_CONFIG,
+  turkey: TURKEY_CONFIG,
+  pizza: PIZZA_CONFIG,
+  avocado: AVOCADO_CONFIG,
+  burger: BURGER_CONFIG,
+  icecream: ICECREAM_CONFIG,
+};
+
+/* =========================================================================
+   AJOUTER UN NOUVEAU PERSONNAGE — guide rapide
+
+   1. Ajoutez sa palette de couleurs dans COLORS (constants.js).
+   2. Écrivez une fonction `drawMonPersonnage(ctx, f)` ici. Le plus simple
+      est de copier `drawSausage` et de modifier les formes / couleurs.
+      Vous avez accès à `f.state` (idle, walk, jump, lightAttack,
+      heavyAttack, specialAttack, dodge, hurt, win, lose), `f.animTime`,
+      `f.stateTime`, `f.hitFlash`, `f.grounded`, `f.vh`. Les fonctions
+      `drawEyes`, `drawMouth` et `getLimbOffset` gèrent déjà les
+      expressions et l'animation du membre d'attaque pour vous.
+   3. Donnez-lui une attaque spéciale UNIQUE via `special` :
+        special: {
+          label: 'Nom de la technique', icon: '✨',
+          kind: 'melee',               // ou 'melee_both_sides' ou 'projectile'
+          damage: 10, range: 70,
+          startup: 0.12, active: 0.14, recovery: 0.3,
+          knockback: 280, hitstun: 0.32, lunge: 0,
+          cooldown: 1.8,
+        }
+      - `kind: 'melee'` : un coup classique, portée/dégâts libres (le
+        membre d'attaque s'anime automatiquement via `getLimbOffset`).
+      - `kind: 'melee_both_sides'` : touche à gauche ET à droite en même
+        temps (voir `drawTurkey` pour l'exemple d'affichage à deux bras).
+      - Options bonus sur n'importe quel `special` : `unblockable: true`
+        (traverse l'esquive) ou `slow: { factor: 0.5, duration: 2.5 }`
+        (ralentit la victime).
+      - `kind: 'projectile'` : ajoutez un objet `projectile: { speed,
+        gravity, radius, lifetime, draw }` — `draw(ctx, projectile)` dessine
+        l'objet lancé (voir `drawAvocadoPit`). Le lancer est géré
+        automatiquement par game.js/combat.js, rien d'autre à faire.
+   4. Déclarez sa configuration complète (voir SAUSAGE_CONFIG plus haut
+      comme modèle) et ajoutez-la au registre : CHARACTERS.monperso = ...
+   5. Le personnage apparaît alors automatiquement dans l'écran de
+      sélection (généré dynamiquement depuis CHARACTERS par ui.js) — rien
+      à faire côté menu !
+   ========================================================================= */
+
+</script>
+<script>
+/* arena.js */
+/* =========================================================================
+   arena.js — Les arènes (poêle, barbecue, buffet, congélateur, wok) et
+   tous leurs éléments interactifs.
+
+   Un thème (voir ARENA_THEMES dans constants.js) choisit : les couleurs du
+   décor, le style de sol (pan | grill | cake | freezer | wok), les
+   projectiles au sol, les icônes des pièges et les particules d'ambiance.
+   La DISPOSITION de jeu (zone chaude, surfaces glissantes, obstacles) est
+   la même partout pour un équilibrage identique quelle que soit l'arène.
+
+   Ce fichier expose, pour fighter.js et combat.js :
+     - getSurfaceAt(x)            -> { oily, hot }
+     - resolveObstacleCollision(f)-> ajuste f.x si collision avec un obstacle
+     - applyHotZoneEffect(dt, f)  -> dégâts + poussée dans la zone chaude
+     - veggies[]                  -> objets au sol projetables
+
+   Pour AJOUTER UNE NOUVELLE ARÈNE : voir le guide en bas du fichier.
+   ========================================================================= */
+
+// Palettes du "sol" (la surface sur laquelle on se bat) selon le style.
+const FLOOR_PALETTES = {
+  pan:     { rim: '#c7cdd6', rimDark: '#8c929c', in0: '#4a4238', in1: '#332c26', in2: '#241f1b' },
+  grill:   { rim: '#a9afb7', rimDark: '#5a5f66', in0: '#2d2d30', in1: '#1d1d1f', in2: '#101011' },
+  cake:    { rim: '#ffffff', rimDark: '#f4a9cb', in0: '#fff4f8', in1: '#ffd9ea', in2: '#ffbcd9' },
+  freezer: { rim: '#f3fbff', rimDark: '#8fc3e0', in0: '#d6eefb', in1: '#b0d8ee', in2: '#8cc0e2' },
+  wok:     { rim: '#9b9da3', rimDark: '#44464b', in0: '#33292a', in1: '#1f1718', in2: '#130e0e' },
+};
+
+class Arena {
+  constructor(themeId = 'poele') {
+    this.theme = ARENA_THEMES[themeId] || ARENA_THEMES.poele;
+    this.animTime = 0;
+    this.ambient = [];
+    this.ambientTimer = 0;
+    this.buildCaches();
+    this.reset();
+  }
+
+  // Réinitialise uniquement les éléments qui doivent repartir à zéro à
+  // chaque nouveau match (objets au sol, particules). Le décor reste.
+  reset() {
+    this.veggies = [];
+    this.ambient = [];
+    const startXs = [220, 640, 760];
+    for (let i = 0; i < VEGGIE_COUNT; i++) {
+      this.veggies.push(this.makeVeggie(startXs[i % startXs.length]));
+    }
+  }
+
+  makeVeggie(x) {
+    const types = this.theme.veggieTypes;
+    return {
+      type: types[randInt(0, types.length - 1)],
+      x,
+      h: 0,
+      vx: 0,
+      vh: 0,
+      state: 'idle', // 'idle' | 'flying' | 'hidden'
+      respawnTimer: 0,
+      rotation: 0,
+      grace: 0, // court délai après un coup de pied avant de pouvoir blesser
+    };
+  }
+
+  randomSpawnX() {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const x = randRange(PAN_LEFT + 70, PAN_RIGHT - 70);
+      const inHotZone = Math.abs(x - HOT_ZONE_CENTER_X) < HOT_ZONE_HALF_WIDTH + 20;
+      const inObstacle = OBSTACLES.some((o) => x > o.x - 30 && x < o.x + o.width + 30);
+      if (!inHotZone && !inObstacle) return x;
+    }
+    return PAN_LEFT + 70;
+  }
+
+  // ---- Requêtes environnement (utilisées par fighter.js) -----------------
+
+  getSurfaceAt(x) {
+    const oily = OIL_PUDDLES.some((p) => x >= p.x1 && x <= p.x2);
+    const hot = Math.abs(x - HOT_ZONE_CENTER_X) < HOT_ZONE_HALF_WIDTH;
+    return { oily, hot };
+  }
+
+  resolveObstacleCollision(fighter) {
+    for (const obstacle of OBSTACLES) {
+      const obsLeft = obstacle.x;
+      const obsRight = obstacle.x + obstacle.width;
+      if (fighter.h >= obstacle.clear) continue; // assez haut : on passe par-dessus
+      const feetLeft = fighter.x - FEET_HALF_WIDTH;
+      const feetRight = fighter.x + FEET_HALF_WIDTH;
+      if (!(feetRight > obsLeft && feetLeft < obsRight)) continue;
+
+      // Repousse le combattant du côté par lequel il est arrivé.
+      const center = (obsLeft + obsRight) / 2;
+      if (fighter.x < center) {
+        fighter.x = obsLeft - FEET_HALF_WIDTH;
+        if (fighter.vx > 0) fighter.vx = 0;
+      } else {
+        fighter.x = obsRight + FEET_HALF_WIDTH;
+        if (fighter.vx < 0) fighter.vx = 0;
+      }
+    }
+  }
+
+  applyHotZoneEffect(dt, fighter) {
+    if (!fighter.grounded) return;
+    if (Math.abs(fighter.x - HOT_ZONE_CENTER_X) >= HOT_ZONE_HALF_WIDTH) return;
+    fighter.health = clamp(fighter.health - HOT_ZONE_DPS * dt, 0, HEALTH_MAX);
+    const push = fighter.x < HOT_ZONE_CENTER_X ? -1 : 1;
+    fighter.vx += push * HOT_ZONE_PUSH * dt;
+    fighter.hitFlash = Math.max(fighter.hitFlash, 0.08);
+  }
+
+  // ---- Mise à jour : objets au sol + particules d'ambiance ---------------
+
+  update(dt) {
+    this.animTime += dt;
+    this.updateAmbient(dt);
+
+    for (const v of this.veggies) {
+      if (v.state === 'hidden') {
+        v.respawnTimer -= dt;
+        if (v.respawnTimer <= 0) {
+          v.state = 'idle';
+          v.x = this.randomSpawnX();
+          v.h = 0; v.vx = 0; v.vh = 0; v.rotation = 0;
+        }
+        continue;
+      }
+      if (v.state === 'flying') {
+        if (v.grace > 0) v.grace = Math.max(0, v.grace - dt);
+        v.vh -= VEGGIE_GRAVITY * dt;
+        v.h += v.vh * dt;
+        v.x += v.vx * dt;
+        v.rotation += v.vx * dt * 0.02;
+
+        const minX = PAN_LEFT + v.type.radius;
+        const maxX = PAN_RIGHT - v.type.radius;
+        if (v.x < minX) { v.x = minX; v.vx *= -0.4; }
+        if (v.x > maxX) { v.x = maxX; v.vx *= -0.4; }
+
+        if (v.h <= 0) {
+          v.h = 0;
+          if (Math.abs(v.vx) > 40 || Math.abs(v.vh) > 40) {
+            v.vx *= 0.45;
+            v.vh = Math.abs(v.vh) * 0.35;
+            if (v.vh < 60) v.vh = 0;
+          } else {
+            v.vx = 0; v.vh = 0;
+            v.state = 'idle';
+          }
+        }
+      }
+    }
+  }
+
+  updateAmbient(dt) {
+    for (const p of this.ambient) {
+      p.age += dt;
+      p.x += p.vx * dt + (p.sway ? Math.sin(this.animTime * 2 + p.seed) * p.sway * dt : 0);
+      p.y += p.vy * dt;
+    }
+    this.ambient = this.ambient.filter((p) => p.age < p.life);
+
+    this.ambientTimer -= dt;
+    if (this.ambientTimer > 0 || this.ambient.length > 50) return;
+    const style = this.theme.floorStyle;
+    const seed = Math.random() * 10;
+    if (style === 'pan' || style === 'wok') {
+      this.ambientTimer = 0.16;
+      this.ambient.push({ kind: 'steam', x: HOT_ZONE_CENTER_X + randRange(-85, 85), y: FLOOR_Y - 14,
+        vx: randRange(-8, 8), vy: randRange(-48, -26), life: randRange(1.3, 2.2), age: 0,
+        size: randRange(8, 15), sway: 14, seed });
+    } else if (style === 'grill') {
+      this.ambientTimer = 0.1;
+      this.ambient.push({ kind: 'ember', x: randRange(PAN_LEFT, PAN_RIGHT), y: FLOOR_Y + randRange(0, 30),
+        vx: randRange(-10, 10), vy: randRange(-120, -60), life: randRange(0.9, 1.7), age: 0,
+        size: randRange(1.8, 3.6), sway: 20, seed });
+    } else if (style === 'cake') {
+      this.ambientTimer = 0.14;
+      this.ambient.push({ kind: 'twinkle', x: randRange(40, CANVAS_WIDTH - 40), y: randRange(90, FLOOR_Y - 30),
+        vx: 0, vy: randRange(-4, 8), life: randRange(1.2, 2.2), age: 0,
+        size: randRange(2.5, 5), sway: 0, seed,
+        color: pick(['255,255,255', '255,225,120', '255,160,205', '170,215,255']) });
+    } else if (style === 'freezer') {
+      this.ambientTimer = 0.09;
+      this.ambient.push({ kind: 'snow', x: randRange(0, CANVAS_WIDTH), y: -8,
+        vx: 0, vy: randRange(26, 52), life: randRange(7, 10), age: 0,
+        size: randRange(1.6, 3.6), sway: 22, seed });
+    }
+  }
+
+  kickVeggie(v, facing) {
+    v.state = 'flying';
+    v.vx = facing * VEGGIE_LAUNCH_SPEED;
+    v.vh = 300;
+    v.grace = 0.12;
+  }
+
+  hideVeggie(v) {
+    v.state = 'hidden';
+    v.respawnTimer = VEGGIE_RESPAWN_DELAY;
+  }
+
+  veggieRect(v) {
+    const r = v.type.radius;
+    const bottom = FLOOR_Y - v.h;
+    return { left: v.x - r, right: v.x + r, top: bottom - r * 2, bottom };
+  }
+
+  // ---- Caches : les couches statiques sont dessinées une seule fois ------
+
+  buildCaches() {
+    const make = () => {
+      const c = document.createElement('canvas');
+      c.width = CANVAS_WIDTH;
+      c.height = CANVAS_HEIGHT;
+      return c;
+    };
+    this.bgBack = make();
+    const b = this.bgBack.getContext('2d');
+    this.drawWall(b);
+    this.drawBase(b);
+
+    this.bgFloor = make();
+    const f = this.bgFloor.getContext('2d');
+    this.drawFloor(f);
+    this.drawProps(f);
+  }
+
+  // ---- Rendu par frame ------------------------------------------------------
+
+  drawBackground(ctx) {
+    ctx.drawImage(this.bgBack, 0, 0);
+    this.drawBaseAnimated(ctx);
+    ctx.drawImage(this.bgFloor, 0, 0);
+    this.drawSlipZones(ctx);
+    this.drawHotZone(ctx);
+    for (const obstacle of OBSTACLES) this.drawObstacle(ctx, obstacle);
+  }
+
+  // Par-dessus les personnages : objets au sol
+  drawVeggies(ctx) {
+    ctx.font = '30px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const v of this.veggies) {
+      if (v.state === 'hidden') continue;
+      const bottom = FLOOR_Y - v.h;
+      ctx.save();
+      ctx.translate(v.x, bottom - v.type.radius);
+      ctx.rotate(v.rotation);
+      ctx.fillText(v.type.emoji, 0, 0);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.beginPath();
+      const k = 1 - v.h / 260 > 0.3 ? 1 - v.h / 260 : 0.3;
+      ctx.ellipse(v.x, FLOOR_Y, v.type.radius * k, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Tout en avant-plan : particules d'ambiance + vignettage léger
+  drawForeground(ctx) {
+    for (const p of this.ambient) {
+      const t = 1 - p.age / p.life;
+      if (p.kind === 'steam') {
+        ctx.fillStyle = `rgba(255,255,255,${0.2 * t})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.3 - t * 0.3), 0, Math.PI * 2); ctx.fill();
+      } else if (p.kind === 'ember') {
+        ctx.fillStyle = `rgba(255,${Math.floor(120 + 100 * t)},40,${0.9 * t})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * t + 0.6, 0, Math.PI * 2); ctx.fill();
+      } else if (p.kind === 'twinkle') {
+        const a = Math.sin(t * Math.PI) * 0.9;
+        ctx.fillStyle = `rgba(${p.color},${a})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = `rgba(${p.color},${a * 0.8})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x - p.size * 2, p.y); ctx.lineTo(p.x + p.size * 2, p.y);
+        ctx.moveTo(p.x, p.y - p.size * 2); ctx.lineTo(p.x, p.y + p.size * 2);
+        ctx.stroke();
+      } else if (p.kind === 'snow') {
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    const vg = ctx.createRadialGradient(
+      CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, CANVAS_HEIGHT * 0.45,
+      CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, CANVAS_WIDTH * 0.62
+    );
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(20,8,0,0.28)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  }
+
+  // ========================= MURS / DÉCORS DE FOND ==========================
+
+  drawWall(ctx) {
+    const th = this.theme;
+    const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    grad.addColorStop(0, th.wallTop);
+    grad.addColorStop(1, th.wallBottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    switch (th.floorStyle) {
+      case 'pan': this.wallKitchen(ctx); break;
+      case 'grill': this.wallGarden(ctx); break;
+      case 'cake': this.wallParty(ctx); break;
+      case 'freezer': this.wallFreezer(ctx); break;
+      case 'wok': this.wallAsian(ctx); break;
+    }
+  }
+
+  wallKitchen(ctx) {
+    // Carrelage crédence en damier, derrière la cuisinière
+    const tile = 30;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAN_LEFT - 60, 60, PAN_RIGHT - PAN_LEFT + 120, FLOOR_Y - 60);
+    ctx.clip();
+    for (let ty = 60; ty < FLOOR_Y + tile; ty += tile) {
+      for (let tx = PAN_LEFT - 60; tx < PAN_RIGHT + 60; tx += tile) {
+        const even = Math.round((tx + ty) / tile) % 2 === 0;
+        ctx.fillStyle = even ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.12)';
+        ctx.fillRect(tx, ty, tile - 1, tile - 1);
+      }
+    }
+    ctx.restore();
+    this.drawSun(ctx, 60, 55, '255,221,120');
+  }
+
+  drawSun(ctx, x, y, rgb) {
+    ctx.fillStyle = `rgba(${rgb},0.92)`;
+    ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(${rgb},0.6)`; ctx.lineWidth = 5;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * 34, y + Math.sin(a) * 34);
+      ctx.lineTo(x + Math.cos(a) * 42, y + Math.sin(a) * 42);
+      ctx.stroke();
+    }
+  }
+
+  wallGarden(ctx) {
+    this.drawSun(ctx, CANVAS_WIDTH - 90, 70, '255,226,120');
+    // nuages
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    for (const [cx, cy, s] of [[230, 78, 1], [560, 54, 0.8], [800, 120, 0.7]]) {
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 46 * s, 18 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx - 28 * s, cy + 6 * s, 28 * s, 14 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 30 * s, cy + 5 * s, 30 * s, 15 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // palissade en bois
+    for (let x = 0; x < CANVAS_WIDTH; x += 34) {
+      ctx.fillStyle = (x / 34) % 2 === 0 ? '#c99a62' : '#b98852';
+      ctx.beginPath();
+      ctx.moveTo(x, 200);
+      ctx.lineTo(x + 17, 184);
+      ctx.lineTo(x + 34, 200);
+      ctx.lineTo(x + 34, FLOOR_Y + 70);
+      ctx.lineTo(x, FLOOR_Y + 70);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(80,45,15,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(80,45,15,0.35)';
+    ctx.fillRect(0, 250, CANVAS_WIDTH, 8);
+    ctx.fillRect(0, 350, CANVAS_WIDTH, 8);
+    // pelouse
+    ctx.fillStyle = '#7bbf4a';
+    ctx.fillRect(0, FLOOR_Y + 50, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.strokeStyle = '#5e9e36';
+    ctx.lineWidth = 2;
+    for (let x = 0; x < CANVAS_WIDTH; x += 12) {
+      ctx.beginPath();
+      ctx.moveTo(x, FLOOR_Y + 52);
+      ctx.lineTo(x + 3, FLOOR_Y + 44 + ((x * 7) % 8));
+      ctx.stroke();
+    }
+  }
+
+  wallParty(ctx) {
+    // confettis fixes
+    const cols = ['#ff7eb6', '#ffd23a', '#7fd6ff', '#9be37a', '#c59bff'];
+    for (let i = 0; i < 70; i++) {
+      const x = (Math.sin(i * 12.9898) * 43758.5453 % 1 + 1) % 1 * CANVAS_WIDTH;
+      const y = (Math.sin(i * 78.233) * 12345.6789 % 1 + 1) % 1 * (FLOOR_Y - 20);
+      ctx.fillStyle = cols[i % cols.length];
+      ctx.globalAlpha = 0.5;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(i);
+      ctx.fillRect(-4, -2, 8, 4);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    // guirlande de fanions
+    ctx.strokeStyle = '#a07a94';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 30);
+    ctx.quadraticCurveTo(CANVAS_WIDTH / 2, 120, CANVAS_WIDTH, 30);
+    ctx.stroke();
+    for (let i = 1; i < 16; i++) {
+      const t = i / 16;
+      const x = t * CANVAS_WIDTH;
+      const y = (1 - t) * (1 - t) * 30 + 2 * (1 - t) * t * 120 + t * t * 30;
+      ctx.fillStyle = cols[i % cols.length];
+      ctx.beginPath();
+      ctx.moveTo(x - 13, y);
+      ctx.lineTo(x + 13, y);
+      ctx.lineTo(x, y + 28);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // nappe à carreaux au pied de la table
+    for (let x = 0; x < CANVAS_WIDTH; x += 30) {
+      for (let y = FLOOR_Y + 60; y < CANVAS_HEIGHT; y += 30) {
+        ctx.fillStyle = ((x + y) / 30) % 2 === 0 ? '#ff9ec7' : '#fff';
+        ctx.fillRect(x, y, 30, 30);
+      }
+    }
+  }
+
+  wallFreezer(ctx) {
+    // étagères métalliques
+    ctx.strokeStyle = 'rgba(120,170,200,0.75)';
+    ctx.lineWidth = 6;
+    for (const y of [150, 270]) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_WIDTH, y); ctx.stroke();
+    }
+    ctx.lineWidth = 3;
+    for (let x = 20; x < CANVAS_WIDTH; x += 44) {
+      ctx.beginPath(); ctx.moveTo(x, 150); ctx.lineTo(x, 156); ctx.moveTo(x, 270); ctx.lineTo(x, 276); ctx.stroke();
+    }
+    // givre dans les coins
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2;
+    for (const [cx, cy, dir] of [[0, 0, 1], [CANVAS_WIDTH, 0, -1]]) {
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI / 2;
+        const len = 40 + (i % 3) * 22;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + dir * Math.cos(a) * len, cy + Math.sin(a) * len);
+        ctx.stroke();
+      }
+    }
+    // panneau du fond, éclairage froid
+    const g = ctx.createRadialGradient(CANVAS_WIDTH / 2, 160, 20, CANVAS_WIDTH / 2, 200, 420);
+    g.addColorStop(0, 'rgba(255,255,255,0.55)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  }
+
+  wallAsian(ctx) {
+    // lattes de bambou verticales
+    for (let x = 0; x < CANVAS_WIDTH; x += 40) {
+      ctx.fillStyle = (x / 40) % 2 === 0 ? 'rgba(120,50,20,0.16)' : 'rgba(255,255,255,0.08)';
+      ctx.fillRect(x, 0, 40, CANVAS_HEIGHT);
+    }
+    // guirlande de lanternes
+    ctx.strokeStyle = '#5a2a14';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(CANVAS_WIDTH, 26); ctx.stroke();
+    for (let i = 0; i < 9; i++) {
+      const x = 60 + i * 105;
+      const y = 40 + (i % 2) * 14;
+      ctx.beginPath(); ctx.moveTo(x, 26); ctx.lineTo(x, y); ctx.stroke();
+      const lg = ctx.createRadialGradient(x - 4, y + 14, 3, x, y + 20, 22);
+      lg.addColorStop(0, '#ff7a5a');
+      lg.addColorStop(1, '#c4180f');
+      ctx.fillStyle = lg;
+      ctx.beginPath(); ctx.ellipse(x, y + 20, 16, 20, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e6b84a';
+      ctx.fillRect(x - 6, y - 2, 12, 5);
+      ctx.fillRect(x - 6, y + 38, 12, 4);
+      ctx.strokeStyle = '#e6b84a';
+      ctx.beginPath(); ctx.moveTo(x, y + 42); ctx.lineTo(x, y + 52); ctx.stroke();
+      ctx.strokeStyle = '#5a2a14';
+    }
+  }
+
+  // ========================= BASE (sous le plateau) ========================
+
+  drawBase(ctx) {
+    const style = this.theme.floorStyle;
+    if (style === 'pan' || style === 'wok') {
+      const stoveTop = FLOOR_Y + 68;
+      const grad = ctx.createLinearGradient(0, stoveTop, 0, CANVAS_HEIGHT);
+      grad.addColorStop(0, style === 'wok' ? '#6a3a28' : '#5b6068');
+      grad.addColorStop(1, style === 'wok' ? '#3a1d12' : '#33363c');
+      ctx.fillStyle = grad;
+      ctx.fillRect(PAN_LEFT - 55, stoveTop, PAN_RIGHT - PAN_LEFT + 110, CANVAS_HEIGHT - stoveTop);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(PAN_LEFT - 55, stoveTop, PAN_RIGHT - PAN_LEFT + 110, 4);
+      for (let i = 0; i < 4; i++) {
+        const bx = PAN_LEFT + 40 + i * 70;
+        ctx.fillStyle = '#202226';
+        ctx.beginPath(); ctx.arc(bx, stoveTop + 26, 11, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(bx, stoveTop + 26); ctx.lineTo(bx + 8, stoveTop + 20); ctx.stroke();
+      }
+    } else if (style === 'grill') {
+      ctx.fillStyle = '#26262a';
+      for (const lx of [PAN_LEFT + 20, PAN_RIGHT - 28]) {
+        ctx.fillRect(lx, FLOOR_Y + 40, 10, CANVAS_HEIGHT - FLOOR_Y);
+      }
+    } else if (style === 'freezer') {
+      ctx.fillStyle = 'rgba(100,150,185,0.55)';
+      ctx.fillRect(0, FLOOR_Y + 62, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillRect(0, FLOOR_Y + 62, CANVAS_WIDTH, 4);
+    }
+  }
+
+  drawBaseAnimated(ctx) {
+    const style = this.theme.floorStyle;
+    const flicker = Math.sin(this.animTime * 10) * 2;
+    if (style === 'pan' || style === 'wok') {
+      this.drawFlame(ctx, PAN_LEFT + 30, FLOOR_Y + 14 + flicker, 1);
+      this.drawFlame(ctx, PAN_RIGHT - 30, FLOOR_Y + 14 - flicker, 1);
+    } else if (style === 'grill') {
+      for (const x of [PAN_LEFT + 6, PAN_RIGHT - 6]) {
+        ctx.fillStyle = `rgba(255,${120 + flicker * 10},30,0.5)`;
+        ctx.beginPath(); ctx.ellipse(x, FLOOR_Y + 52, 26, 11, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  drawFlame(ctx, x, y, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#3aa0ff';
+    ctx.beginPath();
+    ctx.moveTo(0, 14); ctx.quadraticCurveTo(-10, 2, 0, -12); ctx.quadraticCurveTo(10, 2, 0, 14);
+    ctx.fill();
+    ctx.fillStyle = '#ffb23a';
+    ctx.beginPath();
+    ctx.moveTo(0, 9); ctx.quadraticCurveTo(-5, 2, 0, -6); ctx.quadraticCurveTo(5, 2, 0, 9);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ============================ SOL / PLATEAU ===============================
+
+  drawFloor(ctx) {
+    const style = this.theme.floorStyle;
+    const P = FLOOR_PALETTES[style];
+    const cx = (PAN_LEFT + PAN_RIGHT) / 2;
+    const rimRx = (PAN_RIGHT - PAN_LEFT) / 2 + 50;
+
+    this.drawHandles(ctx, style, rimRx);
+
+    // Intérieur
+    const innerGrad = ctx.createLinearGradient(0, FLOOR_Y - 10, 0, CANVAS_HEIGHT - 20);
+    innerGrad.addColorStop(0, P.in0);
+    innerGrad.addColorStop(0.5, P.in1);
+    innerGrad.addColorStop(1, P.in2);
+    ctx.fillStyle = innerGrad;
+    pathRoundedRect(ctx, PAN_LEFT - 24, FLOOR_Y - 8, PAN_RIGHT - PAN_LEFT + 48,
+      CANVAS_HEIGHT - FLOOR_Y + 60, style === 'wok' ? 80 : 34);
+    ctx.fill();
+
+    // Décorations propres à chaque style
+    ctx.save();
+    pathRoundedRect(ctx, PAN_LEFT - 24, FLOOR_Y - 8, PAN_RIGHT - PAN_LEFT + 48,
+      CANVAS_HEIGHT - FLOOR_Y + 60, style === 'wok' ? 80 : 34);
+    ctx.clip();
+    switch (style) {
+      case 'grill': this.floorGrill(ctx); break;
+      case 'cake': this.floorCake(ctx); break;
+      case 'freezer': this.floorFreezer(ctx); break;
+      case 'wok': this.floorWok(ctx); break;
+      default: this.floorPan(ctx); break;
+    }
+    ctx.restore();
+
+    // Rebord
+    ctx.strokeStyle = P.rim;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.ellipse(cx, FLOOR_Y, rimRx, 22, 0, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = P.rimDark;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(cx, FLOOR_Y + 3, rimRx - 4, 18, 0, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(cx - rimRx * 0.35, FLOOR_Y - 4, rimRx * 0.35, 8, 0, Math.PI, Math.PI * 1.6);
+    ctx.stroke();
+  }
+
+  drawHandles(ctx, style, rimRx) {
+    const lx = PAN_LEFT - rimRx * 0.35 - 55;
+    const rx = PAN_RIGHT + rimRx * 0.35 - 15;
+    if (style === 'pan') {
+      ctx.fillStyle = '#3d3f45';
+      pathRoundedRect(ctx, lx, FLOOR_Y - 14, 70, 24, 10); ctx.fill();
+      pathRoundedRect(ctx, rx, FLOOR_Y - 14, 70, 24, 10); ctx.fill();
+    } else if (style === 'grill') {
+      ctx.fillStyle = '#8a5a34';
+      pathRoundedRect(ctx, lx + 6, FLOOR_Y - 12, 64, 20, 9); ctx.fill();
+      pathRoundedRect(ctx, rx, FLOOR_Y - 12, 64, 20, 9); ctx.fill();
+    } else if (style === 'freezer') {
+      ctx.fillStyle = '#c8d6df';
+      pathRoundedRect(ctx, lx + 14, FLOOR_Y - 12, 56, 18, 8); ctx.fill();
+      pathRoundedRect(ctx, rx, FLOOR_Y - 12, 56, 18, 8); ctx.fill();
+    } else if (style === 'wok') {
+      ctx.fillStyle = '#7a4a2c';
+      pathRoundedRect(ctx, lx - 50, FLOOR_Y - 14, 120, 22, 10); ctx.fill();
+      ctx.fillStyle = '#b9bcc2';
+      ctx.fillRect(lx + 62, FLOOR_Y - 15, 10, 24);
+      ctx.strokeStyle = '#6b6e75';
+      ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.arc(rx + 22, FLOOR_Y - 2, 14, -Math.PI / 2, Math.PI * 0.9); ctx.stroke();
+    }
+  }
+
+  floorPan(ctx) {
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    for (let i = 0; i < 40; i++) {
+      const x = PAN_LEFT + ((i * 97) % (PAN_RIGHT - PAN_LEFT));
+      const y = FLOOR_Y + 18 + ((i * 53) % 90);
+      ctx.beginPath(); ctx.ellipse(x, y, 16, 3, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  floorGrill(ctx) {
+    // lueur des braises sous la grille
+    const g = ctx.createLinearGradient(0, FLOOR_Y + 30, 0, FLOOR_Y + 130);
+    g.addColorStop(0, 'rgba(255,110,30,0.55)');
+    g.addColorStop(1, 'rgba(255,60,10,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(PAN_LEFT - 24, FLOOR_Y + 30, PAN_RIGHT - PAN_LEFT + 48, 110);
+    // barreaux de la grille
+    ctx.strokeStyle = '#6a6e75';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(PAN_LEFT - 24, FLOOR_Y + 4); ctx.lineTo(PAN_RIGHT + 24, FLOOR_Y + 4);
+    ctx.moveTo(PAN_LEFT - 24, FLOOR_Y + 32); ctx.lineTo(PAN_RIGHT + 24, FLOOR_Y + 32);
+    ctx.stroke();
+    ctx.lineWidth = 3;
+    for (let x = PAN_LEFT - 20; x < PAN_RIGHT + 24; x += 17) {
+      ctx.beginPath(); ctx.moveTo(x, FLOOR_Y + 4); ctx.lineTo(x, FLOOR_Y + 32); ctx.stroke();
+    }
+  }
+
+  floorCake(ctx) {
+    const x0 = PAN_LEFT - 24, w = PAN_RIGHT - PAN_LEFT + 48;
+    // génoise
+    ctx.fillStyle = '#f2c98f';
+    ctx.fillRect(x0, FLOOR_Y + 30, w, 60);
+    ctx.fillStyle = '#d9484f';
+    ctx.fillRect(x0, FLOOR_Y + 88, w, 8);
+    ctx.fillStyle = '#f2c98f';
+    ctx.fillRect(x0, FLOOR_Y + 96, w, 80);
+    // glaçage rose avec bord ondulé
+    ctx.fillStyle = '#ffe4f0';
+    ctx.fillRect(x0, FLOOR_Y - 10, w, 40);
+    for (let x = x0; x < x0 + w + 24; x += 24) {
+      ctx.beginPath();
+      ctx.arc(x + 12, FLOOR_Y + 30, 12, 0, Math.PI);
+      ctx.fill();
+    }
+    // vermicelles
+    const cols = ['#ff5fa0', '#ffd23a', '#5fc9ff', '#7be07a'];
+    for (let i = 0; i < 50; i++) {
+      const x = x0 + ((i * 61) % w);
+      const y = FLOOR_Y + 4 + ((i * 37) % 22);
+      ctx.strokeStyle = cols[i % cols.length];
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 6, y + (i % 2 ? 3 : -3)); ctx.stroke();
+    }
+  }
+
+  floorFreezer(ctx) {
+    const x0 = PAN_LEFT - 24, w = PAN_RIGHT - PAN_LEFT + 48;
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 2;
+    for (let y = FLOOR_Y + 14; y < CANVAS_HEIGHT; y += 22) {
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + w, y); ctx.stroke();
+    }
+    // poignée du tiroir
+    ctx.fillStyle = '#9db8c8';
+    pathRoundedRect(ctx, HOT_ZONE_CENTER_X - 90, FLOOR_Y + 70, 180, 16, 8); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    pathRoundedRect(ctx, HOT_ZONE_CENTER_X - 86, FLOOR_Y + 72, 172, 4, 2); ctx.fill();
+    // stalactites de glace sous le rebord
+    for (let x = x0 + 6; x < x0 + w; x += 21) {
+      const h = 10 + ((x * 7) % 18);
+      ctx.fillStyle = 'rgba(245,252,255,0.95)';
+      ctx.beginPath();
+      ctx.moveTo(x, FLOOR_Y - 4);
+      ctx.lineTo(x + 14, FLOOR_Y - 4);
+      ctx.lineTo(x + 7, FLOOR_Y - 4 + h + 10);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // paillettes de givre
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    for (let i = 0; i < 40; i++) {
+      ctx.beginPath();
+      ctx.arc(x0 + ((i * 89) % w), FLOOR_Y + 30 + ((i * 47) % 120), 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  floorWok(ctx) {
+    // reflets d'huile
+    ctx.strokeStyle = 'rgba(255,190,110,0.28)';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.ellipse(HOT_ZONE_CENTER_X, FLOOR_Y + 60 + i * 18, 260 - i * 38, 8, 0, 0, Math.PI);
+      ctx.stroke();
+    }
+    // rivets
+    ctx.fillStyle = '#6b6e75';
+    for (let x = PAN_LEFT + 10; x < PAN_RIGHT; x += 90) {
+      ctx.beginPath(); ctx.arc(x, FLOOR_Y + 26, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // ====================== PIÈGES / OBSTACLES / PROPS ========================
+
+  drawSlipZones(ctx) {
+    const th = this.theme;
+    for (const p of OIL_PUDDLES) {
+      const cx = (p.x1 + p.x2) / 2;
+      const rx = (p.x2 - p.x1) / 2;
+      const shimmer = 0.8 + Math.sin(this.animTime * 2 + cx) * 0.15;
+
+      ctx.fillStyle = `rgba(${th.slipInner},${0.22 * shimmer})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, FLOOR_Y - 2, rx + 8, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const grad = ctx.createRadialGradient(cx, FLOOR_Y - 2, 4, cx, FLOOR_Y - 2, rx);
+      grad.addColorStop(0, `rgba(${th.slipInner},${0.85 * shimmer})`);
+      grad.addColorStop(0.65, `rgba(${th.slipMid},${0.75 * shimmer})`);
+      grad.addColorStop(1, `rgba(${th.slipMid},0.15)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(cx, FLOOR_Y - 2, rx, 15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255,255,255,${0.6 * shimmer})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const shineX = cx + Math.sin(this.animTime * 1.3 + cx) * rx * 0.35;
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(shineX, FLOOR_Y - 6, rx * 0.28, 3, -0.2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.font = '18px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(th.slipEmoji, cx - rx * 0.55, FLOOR_Y - 14);
+    }
+  }
+
+  drawHotZone(ctx) {
+    const th = this.theme;
+    const pulse = 0.55 + Math.sin(this.animTime * 3.2) * 0.18;
+    const grad = ctx.createRadialGradient(
+      HOT_ZONE_CENTER_X, FLOOR_Y - 6, 6,
+      HOT_ZONE_CENTER_X, FLOOR_Y - 6, HOT_ZONE_HALF_WIDTH
+    );
+    grad.addColorStop(0, `rgba(255,120,40,${0.55 * pulse})`);
+    grad.addColorStop(0.7, `rgba(255,60,20,${0.28 * pulse})`);
+    grad.addColorStop(1, 'rgba(255,60,20,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(HOT_ZONE_CENTER_X, FLOOR_Y - 6, HOT_ZONE_HALF_WIDTH, 26, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = '26px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    const bob = Math.sin(this.animTime * 4) * 4;
+    ctx.globalAlpha = 0.9;
+    ctx.fillText(th.hotEmoji, HOT_ZONE_CENTER_X - 34, FLOOR_Y - 18 + bob);
+    ctx.fillText(th.hotEmoji, HOT_ZONE_CENTER_X + 34, FLOOR_Y - 18 - bob);
+    ctx.globalAlpha = 1;
+  }
+
+  drawObstacle(ctx, obstacle) {
+    const th = this.theme;
+    const x = obstacle.x, w = obstacle.width, h = obstacle.height;
+    const baseY = FLOOR_Y;
+
+    ctx.fillStyle = th.obstacleBase;
+    pathRoundedRect(ctx, x, baseY - h, w, h, 10);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(60,40,20,0.45)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    if (th.floorStyle === 'pan') {
+      // moulin à sel / poivre : dôme + petits trous
+      ctx.beginPath();
+      ctx.ellipse(x + w / 2, baseY - h, w / 2, 8, 0, Math.PI, Math.PI * 2);
+      ctx.fillStyle = '#cfc6b0';
+      ctx.fill();
+      ctx.fillStyle = '#8f866f';
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(x + w / 2 + i * 8, baseY - h - 2, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.font = '20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#000';
+      ctx.fillText(th.obstacleEmoji, x + w / 2, baseY - h / 2 + 1);
+    }
+  }
+
+  drawProps(ctx) {
+    const th = this.theme;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (th.floorStyle === 'pan') {
+      ctx.font = '30px sans-serif';
+      ctx.strokeStyle = '#7a7268'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(20, 104); ctx.lineTo(100, 104); ctx.stroke();
+      th.propsLeft.forEach((e, i) => {
+        const ux = 35 + i * 30;
+        ctx.beginPath(); ctx.moveTo(ux, 104); ctx.lineTo(ux, 122); ctx.stroke();
+        ctx.fillText(e, ux, 142);
+      });
+      // assiettes empilées
+      ctx.save();
+      ctx.translate(55, FLOOR_Y + 20);
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#eef1f5';
+        ctx.beginPath(); ctx.ellipse(0, -i * 8, 42, 12, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#c9cfd6'; ctx.lineWidth = 2; ctx.stroke();
+      }
+      ctx.restore();
+      // bouteilles de sauce
+      this.drawSauceBottle(ctx, CANVAS_WIDTH - 55, FLOOR_Y - 26, '#e23b3b');
+      this.drawSauceBottle(ctx, CANVAS_WIDTH - 95, FLOOR_Y - 18, '#f2c218');
+      ctx.font = '28px sans-serif';
+      ctx.fillText(th.propsRight[0], CANVAS_WIDTH - 60, 122);
+      ctx.fillText(th.propsRight[1], CANVAS_WIDTH - 95, 130);
+      ctx.fillText(th.propsRight[2], CANVAS_WIDTH - 30, 158);
+      return;
+    }
+
+    // Autres thèmes : décors en emojis, placés de façon cohérente
+    ctx.font = '32px sans-serif';
+    th.propsLeft.forEach((e, i) => ctx.fillText(e, 36 + i * 34, 124 + (i % 2) * 14));
+    th.propsRight.forEach((e, i) => ctx.fillText(e, CANVAS_WIDTH - 36 - i * 34, 124 + (i % 2) * 14));
+    ctx.font = '46px sans-serif';
+    ctx.fillText(th.propsLeft[2], 52, FLOOR_Y + 8);
+    ctx.fillText(th.propsRight[0], CANVAS_WIDTH - 52, FLOOR_Y + 4);
+  }
+
+  drawSauceBottle(ctx, x, y, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = color;
+    pathRoundedRect(ctx, -12, -34, 24, 50, 8);
+    ctx.fill();
+    ctx.fillStyle = '#2b2b2b';
+    pathRoundedRect(ctx, -5, -44, 10, 12, 3);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(-4, -14, 3, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+/* =========================================================================
+   AJOUTER UNE NOUVELLE ARÈNE — guide rapide
+
+   1. Dans constants.js, ajoutez une entrée à ARENA_THEMES (copiez-en une).
+      Champs : name, emoji, floorStyle, wallTop/wallBottom, hotEmoji,
+      slipEmoji/slipInner/slipMid (couleurs RGB de la surface glissante),
+      obstacleEmoji/obstacleBase, veggieTypes (projectiles au sol),
+      propsLeft/propsRight (décors en emojis).
+   2. `floorStyle` choisit le sol parmi : 'pan', 'grill', 'cake', 'freezer',
+      'wok'. Si vous voulez un sol ou un décor INÉDIT :
+        - ajoutez sa palette dans FLOOR_PALETTES (en haut de ce fichier) ;
+        - ajoutez un `case` dans drawWall() (décor de fond), drawBase()
+          (ce qu'il y a sous le plateau) et drawFloor() (sol), en vous
+          inspirant des fonctions existantes (wallGarden, floorCake...) ;
+        - ajoutez, si vous le souhaitez, un cas dans updateAmbient() pour
+          des particules d'ambiance spécifiques.
+   3. L'arène apparaît automatiquement dans l'écran de sélection (ui.js
+      lit ARENA_THEMES). Rien d'autre à faire !
+   ========================================================================= */
+
+</script>
+<script>
+/* combat.js */
+/* =========================================================================
+   combat.js — Résout toutes les interactions d'un pas de simulation :
+   coups qui touchent (y compris coups "double face"), objets envoyés
+   valser, zone chaude, projectiles lancés par les personnages (ex: le
+   noyau d'Avocado). Ne connaît pas la notion de "victoire" (gérée par
+   game.js, qui regarde les points de vie après cet appel).
+   ========================================================================= */
+
+// Projectile lancé par un combattant (≠ des légumes de l'arène, qui sont
+// ramassés/frappés au sol). Défini par `special.projectile` dans
+// characters.js : { speed, gravity, radius, lifetime, draw }.
+class ThrownProjectile {
+  constructor(x, h, facing, owner, def) {
+    const p = def.projectile;
+    this.x = x;
+    this.h = h;
+    this.vx = facing * p.speed;
+    this.vh = p.gravity ? 140 : 0;
+    this.owner = owner;
+    this.def = def;     // la définition du spécial (dégâts, recul...)
+    this.rotation = 0;
+    this.age = 0;
+    this.dead = false;
+  }
+
+  update(dt) {
+    const p = this.def.projectile;
+    this.age += dt;
+    if (p.gravity) this.vh -= VEGGIE_GRAVITY * 0.55 * dt;
+    this.h += this.vh * dt;
+    this.x += this.vx * dt;
+    this.rotation += this.vx * dt * 0.03;
+
+    if (this.h < -10) this.dead = true;
+    if (this.x < PAN_LEFT - 50 || this.x > PAN_RIGHT + 50) this.dead = true;
+    if (this.age > (p.lifetime || 1.5)) this.dead = true;
+  }
+
+  rect() {
+    const r = this.def.projectile.radius;
+    const bottom = FLOOR_Y - Math.max(0, this.h);
+    return { left: this.x - r, right: this.x + r, top: bottom - r * 2, bottom };
+  }
+
+  draw(ctx) {
+    this.def.projectile.draw(ctx, this);
+  }
+}
+
+const Combat = {
+  // Appelé une fois par frame, après que les deux combattants et l'arène
+  // ont été mis à jour (physique/déplacement déjà appliqués).
+  resolve(dt, p1, p2, arena, onHit) {
+    arena.applyHotZoneEffect(dt, p1);
+    arena.applyHotZoneEffect(dt, p2);
+
+    this.resolveAttackVsFighter(p1, p2, onHit);
+    this.resolveAttackVsFighter(p2, p1, onHit);
+
+    this.resolveAttackVsVeggies(p1, arena);
+    this.resolveAttackVsVeggies(p2, arena);
+
+    this.resolveVeggiesVsFighters(arena, [p1, p2], onHit);
+  },
+
+  resolveAttackVsFighter(attacker, defender, onHit) {
+    const atk = attacker.currentAttack;
+    if (!atk) return;
+    for (const hb of attacker.getAttackHitboxes()) {
+      if (atk.hitFlags[hb.index]) continue;
+      if (!rectsOverlap(hb.rect, defender.hurtbox)) continue;
+
+      const landed = defender.applyHit(hb.facingSign, atk.def);
+      atk.hitFlags[hb.index] = true;
+      if (landed && onHit) {
+        onHit({
+          attacker,
+          defender,
+          type: atk.type,
+          x: defender.x,
+          y: defender.top + defender.height * 0.4,
+        });
+      }
+    }
+  },
+
+  resolveAttackVsVeggies(attacker, arena) {
+    const atk = attacker.currentAttack;
+    if (!atk) return;
+    for (const hb of attacker.getAttackHitboxes()) {
+      if (atk.hitFlags[hb.index]) continue;
+      for (const v of arena.veggies) {
+        if (v.state !== 'idle') continue;
+        if (rectsOverlap(hb.rect, arena.veggieRect(v))) {
+          arena.kickVeggie(v, hb.facingSign);
+          atk.hitFlags[hb.index] = true;
+          break;
+        }
+      }
+    }
+  },
+
+  resolveVeggiesVsFighters(arena, fighters, onHit) {
+    for (const v of arena.veggies) {
+      if (v.state !== 'flying' || v.grace > 0) continue;
+      if (Math.abs(v.vx) < 60) continue;
+      const vRect = arena.veggieRect(v);
+      for (const f of fighters) {
+        if (f.invulnerable) continue;
+        if (rectsOverlap(vRect, f.hurtbox)) {
+          const facingSign = v.vx >= 0 ? 1 : -1;
+          const landed = f.applyHit(facingSign, { damage: v.type.damage, knockback: 150, hitstun: 0.3 });
+          if (landed) {
+            arena.hideVeggie(v);
+            if (onHit) onHit({ attacker: null, defender: f, type: 'veggie', x: f.x, y: f.top + f.height * 0.4 });
+          }
+          break;
+        }
+      }
+    }
+  },
+
+  // Projectiles lancés : touchent tout le monde SAUF leur lanceur, et sont
+  // détruits à l'impact (ou s'ils sortent de l'arène / expirent).
+  resolveThrownVsFighters(thrown, fighters, onHit) {
+    for (const p of thrown) {
+      if (p.dead) continue;
+      const pRect = p.rect();
+      for (const f of fighters) {
+        if (f === p.owner) continue;
+        if (f.invulnerable && !p.def.unblockable) continue;
+        if (!rectsOverlap(pRect, f.hurtbox)) continue;
+        const facingSign = p.vx >= 0 ? 1 : -1;
+        const landed = f.applyHit(facingSign, p.def);
+        if (landed) {
+          p.dead = true;
+          if (onHit) onHit({ attacker: p.owner, defender: f, type: 'special', x: f.x, y: f.top + f.height * 0.4 });
+        }
+        break;
+      }
+    }
+  },
+};
+
+</script>
+<script>
+/* ai.js */
+/* =========================================================================
+   ai.js — Contrôleur de l'adversaire en mode Solo.
+
+   L'IA "pense" par intervalles (comme un humain qui réagit avec un temps
+   de latence) plutôt qu'à chaque frame : cela évite un comportement
+   parfait/robotique et rend les 3 niveaux de difficulté (voir
+   AI_DIFFICULTIES dans constants.js) faciles à ajuster.
+
+   Le contrôleur produit un objet identique à celui de InputManager
+   ({left,right,jump,light,heavy,special,dodge}), afin que Fighter.update() ne
+   fasse aucune différence entre un joueur humain et l'IA.
+   ========================================================================= */
+
+class AIController {
+  constructor(difficultyKey = 'normal') {
+    this.setDifficulty(difficultyKey);
+    this.decisionTimer = 0;
+    this.moveDir = 'stay'; // 'left' | 'right' | 'stay', persiste entre deux décisions
+  }
+
+  setDifficulty(key) {
+    this.difficulty = AI_DIFFICULTIES[key] || AI_DIFFICULTIES.normal;
+  }
+
+  update(dt, ai, opponent, arena) {
+    this.decisionTimer -= dt;
+    let act = null;
+
+    if (this.decisionTimer <= 0) {
+      this.decisionTimer = this.difficulty.decisionInterval * randRange(0.75, 1.25);
+      const decision = this.decide(ai, opponent, arena);
+      this.moveDir = decision.move;
+      act = decision.act;
+    }
+
+    return {
+      left: this.moveDir === 'left',
+      right: this.moveDir === 'right',
+      jump: act === 'jump',
+      light: act === 'light',
+      heavy: act === 'heavy',
+      special: act === 'special',
+      dodge: act === 'dodge',
+    };
+  }
+
+  // L'IA est-elle collée à un obstacle dans la direction où elle avance ?
+  isBlockedByObstacle(ai, dir) {
+    const feetEdge = ai.x + dir * FEET_HALF_WIDTH;
+    return OBSTACLES.some((o) => (dir === 1
+      ? o.x - feetEdge >= -2 && o.x - feetEdge < 26
+      : feetEdge - (o.x + o.width) >= -2 && feetEdge - (o.x + o.width) < 26));
+  }
+
+  decide(ai, opp, arena) {
+    const dx = opp.x - ai.x;
+    const dist = Math.abs(dx);
+    const dirToOpp = dx >= 0 ? 1 : -1;
+
+    // En l'air : se contente de dériver vers l'adversaire, pas d'action.
+    if (!ai.grounded) {
+      return { move: dirToOpp === 1 ? 'right' : 'left', act: null };
+    }
+
+    // Dans la zone chaude : on la traverse en direction de l'adversaire s'il
+    // est de l'autre côté (sinon on ressortirait en boucle sans jamais
+    // l'atteindre) ; sinon on en sort par le côté le plus proche.
+    if (arena.getSurfaceAt(ai.x).hot) {
+      const oppOutside = Math.abs(opp.x - HOT_ZONE_CENTER_X) >= HOT_ZONE_HALF_WIDTH;
+      const dir = oppOutside ? dirToOpp : (ai.x < HOT_ZONE_CENTER_X ? -1 : 1);
+      return { move: dir === 1 ? 'right' : 'left', act: this.isBlockedByObstacle(ai, dir) ? 'jump' : null };
+    }
+
+    // L'adversaire attaque et on est à portée : esquiver (parfois).
+    const opponentAttacking = opp.state === 'lightAttack' || opp.state === 'heavyAttack' || opp.state === 'specialAttack';
+    if (opponentAttacking && dist < 100 && Math.random() < this.difficulty.dodgeChance) {
+      return { move: 'stay', act: 'dodge' };
+    }
+
+    // Coup spécial : utilisé à bon escient selon sa nature (un projectile se
+    // tire à distance, un coup de mêlée une fois assez près).
+    const sp = ai.config.special;
+    if (sp && ai.specialCooldown <= 0 && Math.random() < this.difficulty.specialChance) {
+      const isRanged = sp.kind === 'projectile';
+      const reach = isRanged ? 420 : sp.range + 50 + (sp.lunge || 0) * 0.15;
+      const minDist = isRanged ? 120 : 0;
+      if (dist <= reach && dist >= minDist) return { move: 'stay', act: 'special' };
+    }
+
+    const attackRange = 92;
+
+    // Hors de portée : s'approcher (avec un saut occasionnel).
+    if (dist > attackRange) {
+      // Bloquée contre un obstacle ? On saute par-dessus.
+      const blocked = this.isBlockedByObstacle(ai, dirToOpp);
+      const jumpChance = 0.015;
+      const act = blocked || Math.random() < jumpChance ? 'jump' : null;
+      return { move: dirToOpp === 1 ? 'right' : 'left', act };
+    }
+
+    // À portée : attaquer selon l'agressivité, ou faire une "erreur" et
+    // reculer un peu (ce qui rend l'IA battable même en difficile).
+    if (Math.random() < this.difficulty.aggressiveness) {
+      if (Math.random() < this.difficulty.mistakeChance) {
+        return { move: dirToOpp === 1 ? 'left' : 'right', act: null };
+      }
+      const useHeavy = dist < 60 && Math.random() < 0.45;
+      return { move: 'stay', act: useHeavy ? 'heavy' : 'light' };
+    }
+
+    return { move: Math.random() < 0.5 ? (dirToOpp === 1 ? 'left' : 'right') : 'stay', act: null };
+  }
+}
+
+</script>
+<script>
+/* particles.js */
+/* =========================================================================
+   particles.js — Petites étincelles/éclaboussures à l'impact, pour renforcer
+   le côté "cartoon exagéré" des coups. Purement décoratif : n'influence
+   jamais le gameplay.
+   ========================================================================= */
+
+class ParticleSystem {
+  constructor() {
+    this.particles = [];
+  }
+
+  burst(x, y, options = {}) {
+    const count = options.count || 12;
+    const colors = options.colors || ['#ffffff', '#ffe08a'];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = randRange(90, 260);
+      this.particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 40,
+        life: randRange(0.25, 0.5),
+        age: 0,
+        size: randRange(3, 7),
+        color: pick(colors),
+      });
+    }
+  }
+
+  update(dt) {
+    for (const p of this.particles) {
+      p.age += dt;
+      p.vy += 900 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+    this.particles = this.particles.filter((p) => p.age < p.life);
+  }
+
+  draw(ctx) {
+    for (const p of this.particles) {
+      const t = Math.max(0, 1 - p.age / p.life);
+      ctx.globalAlpha = t;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * t, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+</script>
+<script>
+/* ui.js */
+/* =========================================================================
+   ui.js — Toute la couche HTML superposée au canvas : menu principal,
+   écran de configuration (choix des personnages, de l'arène et de la
+   difficulté), HUD (barres de vie + jauges de spécial), décompte avant le
+   combat, écran de victoire. game.js appelle ces méthodes ; cette classe
+   ne contient aucune logique de jeu.
+
+   Les cartes de personnages et d'arènes sont GÉNÉRÉES depuis les registres
+   CHARACTERS (characters.js) et ARENA_THEMES (constants.js) : ajouter un
+   personnage ou une arène dans ces registres suffit à les faire apparaître.
+   ========================================================================= */
+
+class UI {
+  constructor() {
+    const $ = (id) => document.getElementById(id);
+    this.hud = $('hud');
+    this.menu = $('screen-menu');
+    this.setup = $('screen-setup');
+    this.gameover = $('screen-gameover');
+    this.countdown = $('countdown');
+    this.countdownText = $('countdown-text');
+    this.p1NameEl = $('p1-name');
+    this.p2NameEl = $('p2-name');
+    this.p1HealthEl = $('p1-health');
+    this.p2HealthEl = $('p2-health');
+    this.p1SpecialFill = $('p1-special-fill');
+    this.p2SpecialFill = $('p2-special-fill');
+    this.p1SpecialIcon = $('p1-special-icon');
+    this.p2SpecialIcon = $('p2-special-icon');
+    this.winnerBanner = $('winner-banner');
+    this.difficultyBox = $('setup-difficulty');
+    this.p2Title = $('p2-picker-title');
+    this.footerHint = $('footer-hint');
+
+    // Sélection courante (valeurs par défaut)
+    this.selection = { p1: 'sausage', p2: 'turkey', arena: 'poele', difficulty: 'normal' };
+    this.mode = 'pvp';
+    this.onSelectionChange = null; // callback optionnel (aperçu en arrière-plan)
+
+    this.buildCharacterGrid('p1-character-grid', 'p1');
+    this.buildCharacterGrid('p2-character-grid', 'p2');
+    this.buildArenaGrid();
+    this.bindDifficulty();
+    this.refreshSelectionUI();
+  }
+
+  // ---- Construction dynamique des grilles -------------------------------
+
+  buildCharacterGrid(containerId, playerKey) {
+    const grid = document.getElementById(containerId);
+    grid.innerHTML = '';
+    for (const id of Object.keys(CHARACTERS)) {
+      const c = CHARACTERS[id];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pick-card char-card';
+      btn.dataset.id = id;
+      btn.title = `${c.displayName} — ${c.trait}\nSpécial : ${c.special.label}`;
+      btn.innerHTML =
+        `<span class="pick-emoji">${c.emoji}</span>` +
+        `<span class="pick-name">${c.displayName}</span>`;
+      btn.addEventListener('click', () => {
+        this.selection[playerKey] = id;
+        this.refreshSelectionUI();
+        if (this.onSelectionChange) this.onSelectionChange();
+      });
+      grid.appendChild(btn);
+    }
+  }
+
+  buildArenaGrid() {
+    const grid = document.getElementById('arena-grid');
+    grid.innerHTML = '';
+    for (const id of Object.keys(ARENA_THEMES)) {
+      const a = ARENA_THEMES[id];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pick-card arena-card';
+      btn.dataset.id = id;
+      btn.style.setProperty('--arena-top', a.wallTop);
+      btn.style.setProperty('--arena-bottom', a.wallBottom);
+      btn.style.setProperty('--arena-accent', a.accent);
+      btn.innerHTML =
+        `<span class="pick-emoji">${a.emoji}</span>` +
+        `<span class="pick-name">${a.name}</span>`;
+      btn.addEventListener('click', () => {
+        this.selection.arena = id;
+        this.refreshSelectionUI();
+        if (this.onSelectionChange) this.onSelectionChange();
+      });
+      grid.appendChild(btn);
+    }
+  }
+
+  bindDifficulty() {
+    document.querySelectorAll('[data-difficulty]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.selection.difficulty = btn.dataset.difficulty;
+        this.refreshSelectionUI();
+      });
+    });
+  }
+
+  // Met à jour surbrillances + fiches descriptives selon la sélection.
+  refreshSelectionUI() {
+    const mark = (selector, id) => {
+      document.querySelectorAll(selector).forEach((el) => el.classList.toggle('selected', el.dataset.id === id));
+    };
+    mark('#p1-character-grid .pick-card', this.selection.p1);
+    mark('#p2-character-grid .pick-card', this.selection.p2);
+    mark('#arena-grid .pick-card', this.selection.arena);
+    document.querySelectorAll('[data-difficulty]').forEach((el) => {
+      el.classList.toggle('active', el.dataset.difficulty === this.selection.difficulty);
+    });
+
+    const info = (elId, charId) => {
+      const c = CHARACTERS[charId];
+      document.getElementById(elId).innerHTML =
+        `<strong>${c.emoji} ${c.displayName}</strong> — ${c.tagline}<br>` +
+        `<span class="trait">${c.trait}</span><br>` +
+        `<span class="special-name">${c.special.icon} ${c.special.label}</span>`;
+    };
+    info('p1-info', this.selection.p1);
+    info('p2-info', this.selection.p2);
+    document.getElementById('arena-info').textContent = ARENA_THEMES[this.selection.arena].name;
+  }
+
+  // ---- Écrans -----------------------------------------------------------
+
+  hideAllScreens() {
+    this.menu.classList.add('hidden');
+    this.setup.classList.add('hidden');
+    this.gameover.classList.add('hidden');
+    this.countdown.classList.add('hidden');
+    this.hud.classList.add('hidden');
+    this.footerHint.classList.add('hidden');
+  }
+
+  showMenu() {
+    this.hideAllScreens();
+    this.menu.classList.remove('hidden');
+  }
+
+  showSetup(mode) {
+    this.mode = mode;
+    this.hideAllScreens();
+    this.setup.classList.remove('hidden');
+    this.difficultyBox.classList.toggle('hidden', mode !== 'solo');
+    this.p2Title.textContent = mode === 'solo' ? '🤖 Personnage de l\'IA' : '👤 Joueur 2';
+    this.refreshSelectionUI();
+  }
+
+  startFightUI(p1Label, p2Label, p1Config, p2Config) {
+    this.hideAllScreens();
+    this.hud.classList.remove('hidden');
+    this.footerHint.classList.remove('hidden');
+    this.p1NameEl.textContent = p1Label;
+    this.p2NameEl.textContent = p2Label;
+    this.p1SpecialIcon.textContent = p1Config.special.icon;
+    this.p2SpecialIcon.textContent = p2Config.special.icon;
+    this.updateHealth(HEALTH_MAX, HEALTH_MAX);
+    this.updateSpecial(1, 1);
+  }
+
+  updateHealth(p1, p2) {
+    const pct1 = clamp((p1 / HEALTH_MAX) * 100, 0, 100);
+    const pct2 = clamp((p2 / HEALTH_MAX) * 100, 0, 100);
+    this.p1HealthEl.style.width = pct1 + '%';
+    this.p2HealthEl.style.width = pct2 + '%';
+    this.p1HealthEl.className = 'health-bar-inner ' + this.healthClass(pct1);
+    this.p2HealthEl.className = 'health-bar-inner ' + this.healthClass(pct2);
+  }
+
+  healthClass(pct) {
+    if (pct <= 25) return 'low';
+    if (pct <= 55) return 'mid';
+    return '';
+  }
+
+  // ratio : 0 = spécial en recharge, 1 = prêt à l'emploi
+  updateSpecial(r1, r2) {
+    this.p1SpecialFill.style.width = (r1 * 100).toFixed(0) + '%';
+    this.p2SpecialFill.style.width = (r2 * 100).toFixed(0) + '%';
+    this.p1SpecialFill.classList.toggle('ready', r1 >= 1);
+    this.p2SpecialFill.classList.toggle('ready', r2 >= 1);
+    this.p1SpecialIcon.classList.toggle('ready', r1 >= 1);
+    this.p2SpecialIcon.classList.toggle('ready', r2 >= 1);
+  }
+
+  showCountdown(text) {
+    this.countdown.classList.remove('hidden');
+    this.countdownText.textContent = text;
+    this.countdownText.style.animation = 'none';
+    void this.countdownText.offsetWidth; // force le redémarrage de l'animation CSS
+    this.countdownText.style.animation = '';
+  }
+
+  hideCountdown() {
+    this.countdown.classList.add('hidden');
+  }
+
+  showGameOver(winnerLabel, winnerEmoji) {
+    this.hud.classList.add('hidden');
+    this.footerHint.classList.add('hidden');
+    this.gameover.classList.remove('hidden');
+    this.winnerBanner.innerHTML =
+      `${winnerEmoji} <span class="who">${winnerLabel} GAGNE !</span><span class="sub">Bien joué !</span>`;
+  }
+}
+
+</script>
+<script>
+/* game.js */
+/* =========================================================================
+   game.js — Chef d'orchestre : boucle de jeu (requestAnimationFrame),
+   machine à états (menu / configuration / décompte / combat / victoire),
+   et connexion entre l'InputManager, les Fighters, l'Arena, le Combat et
+   l'UI. Gère aussi les projectiles lancés et l'arrêt sur image à l'impact.
+   ========================================================================= */
+
+class Game {
+  constructor() {
+    this.canvas = document.getElementById('game-canvas');
+    this.ctx = this.canvas.getContext('2d');
+
+    this.ui = new UI();
+    this.input = new InputManager();
+    this.particles = new ParticleSystem();
+    this.ai = new AIController('normal');
+
+    this.mode = 'pvp';     // 'pvp' | 'solo'
+    this.state = 'menu';   // 'menu' | 'setup' | 'countdown' | 'fight' | 'gameover'
+
+    this.countdownSteps = ['3', '2', '1', 'COMBAT !'];
+    this.countdownIndex = 0;
+    this.countdownTimer = 0;
+
+    this.shake = 0;
+    this.hitStop = 0;
+    this.skippedInput = false;
+    this.lastTime = 0;
+    this.thrown = [];      // projectiles lancés par les personnages
+
+    this.buildMatchObjects(); // combattants + arène depuis la sélection courante
+    this.bindUIEvents();
+  }
+
+  init() {
+    this.ui.onSelectionChange = () => this.buildMatchObjects(); // aperçu en direct
+    this.ui.showMenu();
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  // Instancie combattants et arène selon la sélection de l'écran de config.
+  buildMatchObjects() {
+    const sel = this.ui.selection;
+    this.arena = new Arena(sel.arena);
+    this.p1 = new Fighter(CHARACTERS[sel.p1], 'Joueur 1', PAN_LEFT + 160, 1);
+    this.p2 = new Fighter(CHARACTERS[sel.p2], this.mode === 'solo' ? 'IA' : 'Joueur 2', PAN_RIGHT - 160, -1);
+    this.thrown = [];
+  }
+
+  bindUIEvents() {
+    const $ = (id) => document.getElementById(id);
+    $('btn-mode-pvp').addEventListener('click', () => this.openSetup('pvp'));
+    $('btn-mode-solo').addEventListener('click', () => this.openSetup('solo'));
+    $('btn-setup-back').addEventListener('click', () => this.returnToMenu());
+    $('btn-start-match').addEventListener('click', () => {
+      this.ai.setDifficulty(this.ui.selection.difficulty);
+      this.beginCountdown();
+    });
+    $('btn-replay').addEventListener('click', () => this.beginCountdown());
+    $('btn-change-setup').addEventListener('click', () => this.openSetup(this.mode));
+    $('btn-back-menu').addEventListener('click', () => this.returnToMenu());
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.state !== 'menu') this.returnToMenu();
+    });
+  }
+
+  openSetup(mode) {
+    this.mode = mode;
+    this.state = 'setup';
+    this.ui.showSetup(mode);
+    this.buildMatchObjects();
+  }
+
+  returnToMenu() {
+    this.state = 'menu';
+    this.ui.showMenu();
+  }
+
+  beginCountdown() {
+    this.buildMatchObjects();
+
+    const c1 = this.p1.config;
+    const c2 = this.p2.config;
+    const p1Label = `${c1.emoji} Joueur 1 — ${c1.displayName}`;
+    const p2Label = this.mode === 'solo' ? `🤖 IA — ${c2.displayName}` : `${c2.emoji} Joueur 2 — ${c2.displayName}`;
+    this.ui.startFightUI(p1Label, p2Label, c1, c2);
+
+    this.hitStop = 0;
+    this.shake = 0;
+    this.countdownIndex = 0;
+    this.countdownTimer = 0.7;
+    this.state = 'countdown';
+    this.ui.showCountdown(this.countdownSteps[0]);
+  }
+
+  updateCountdown(dt) {
+    this.countdownTimer -= dt;
+    if (this.countdownTimer > 0) return;
+    this.countdownIndex++;
+    if (this.countdownIndex >= this.countdownSteps.length) {
+      this.state = 'fight';
+      this.ui.hideCountdown();
+      return;
+    }
+    const isLast = this.countdownIndex === this.countdownSteps.length - 1;
+    this.countdownTimer = isLast ? 0.9 : 0.7;
+    this.ui.showCountdown(this.countdownSteps[this.countdownIndex]);
+  }
+
+  // ---- Effets d'impact ("juice") -----------------------------------------
+
+  onHit(hit) {
+    const heavyish = hit.type === 'heavy' || hit.type === 'special';
+    const tint = hit.attacker ? hit.attacker.config.colors.body || hit.attacker.config.colors.bun || '#ffffff' : '#8fd14f';
+
+    this.particles.burst(hit.x, hit.y, {
+      count: hit.type === 'special' ? 26 : hit.type === 'heavy' ? 20 : hit.type === 'veggie' ? 10 : 12,
+      colors: hit.type === 'veggie' ? ['#ffd23a', '#8fd14f'] : ['#ffffff', '#ffe08a', tint],
+    });
+    if (hit.type === 'special') this.shake = 13;
+    else if (hit.type === 'heavy') this.shake = 10;
+    else if (hit.type === 'light') this.shake = 4;
+    else this.shake = Math.max(this.shake, 3);
+
+    this.hitStop = heavyish ? HITSTOP_HEAVY : hit.type === 'light' ? HITSTOP_LIGHT : 0;
+  }
+
+  endMatch() {
+    this.state = 'gameover';
+    const p1Won = this.p2.isDefeated() && !this.p1.isDefeated();
+    const winner = p1Won ? this.p1 : this.p2;
+    const loser = p1Won ? this.p2 : this.p1;
+    winner.setWin();
+    loser.setLose();
+    const name = winner.config.displayName.toUpperCase();
+    const label = winner === this.p2 && this.mode === 'solo' ? `L'IA ${name}` : name;
+    this.ui.showGameOver(label, winner.config.emoji);
+  }
+
+  // ---- Mise à jour ----------------------------------------------------------
+
+  update(dt) {
+    // Animations "idle" / "win" / "lose" vivantes même hors combat.
+    this.p1.animTime += dt;
+    this.p2.animTime += dt;
+    this.arena.update(dt);
+    this.particles.update(dt);
+    if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 30);
+
+    if (this.state === 'countdown') { this.updateCountdown(dt); return; }
+    if (this.state !== 'fight') return;
+
+    // Arrêt sur image à l'impact : on gèle la simulation quelques frames,
+    // sans perdre les touches pressées pendant ce court instant.
+    if (this.hitStop > 0) {
+      this.hitStop -= dt;
+      this.skippedInput = true;
+      return;
+    }
+
+    const input1 = this.input.getState(CONTROLS.p1);
+    const input2 = this.mode === 'solo'
+      ? this.ai.update(dt, this.p2, this.p1, this.arena)
+      : this.input.getState(CONTROLS.p2);
+
+    this.p1.update(dt, input1, this.arena, this.p2);
+    this.p2.update(dt, input2, this.arena, this.p1);
+
+    this.spawnProjectiles();
+    for (const p of this.thrown) p.update(dt);
+
+    const onHit = (hit) => this.onHit(hit);
+    Combat.resolve(dt, this.p1, this.p2, this.arena, onHit);
+    Combat.resolveThrownVsFighters(this.thrown, [this.p1, this.p2], onHit);
+    this.thrown = this.thrown.filter((p) => !p.dead);
+
+    this.ui.updateHealth(this.p1.health, this.p2.health);
+    this.ui.updateSpecial(this.p1.specialCooldownRatio, this.p2.specialCooldownRatio);
+
+    if (this.p1.isDefeated() || this.p2.isDefeated()) this.endMatch();
+  }
+
+  // Crée les projectiles des attaques spéciales de type 'projectile'.
+  spawnProjectiles() {
+    for (const f of [this.p1, this.p2]) {
+      if (!f.shouldSpawnProjectile()) continue;
+      const spawn = f.getProjectileSpawnPoint();
+      this.thrown.push(new ThrownProjectile(spawn.x, spawn.h, f.facing, f, f.currentAttack.def));
+      f.markProjectileSpawned();
+      this.particles.burst(spawn.x, FLOOR_Y - spawn.h, { count: 8, colors: ['#ffffff', '#c8e6a0'] });
+    }
+  }
+
+  // ---- Rendu -----------------------------------------------------------------
+
+  render() {
+    const ctx = this.ctx;
+    ctx.save();
+    if (this.shake > 0) {
+      ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
+    }
+    ctx.clearRect(-20, -20, CANVAS_WIDTH + 40, CANVAS_HEIGHT + 40);
+
+    this.arena.drawBackground(ctx);
+
+    const order = this.p1.x <= this.p2.x ? [this.p1, this.p2] : [this.p2, this.p1];
+    order[0].draw(ctx);
+    order[1].draw(ctx);
+
+    for (const p of this.thrown) p.draw(ctx);
+    this.arena.drawVeggies(ctx);
+    this.particles.draw(ctx);
+    this.arena.drawForeground(ctx);
+
+    ctx.restore();
+  }
+
+  loop(timestamp) {
+    let dt = (timestamp - this.lastTime) / 1000;
+    this.lastTime = timestamp;
+    if (!dt || dt > 0.1) dt = 1 / 60; // 1ère frame ou onglet resté en pause
+
+    this.skippedInput = false;
+    this.update(dt);
+    this.render();
+    if (!this.skippedInput) this.input.endFrame();
+
+    requestAnimationFrame((t) => this.loop(t));
+  }
+}
+
+</script>
+<script>
+/* main.js */
+/* =========================================================================
+   main.js — Point d'entrée. Crée le jeu une fois le DOM prêt.
+   ========================================================================= */
+
+window.addEventListener('DOMContentLoaded', () => {
+  window.game = new Game();
+  window.game.init();
+});
+
+</script>
+
+<script>
+/* Contrôles tactiles mobile */
+(function () {
+  function setupTouchControls() {
+    const input = window.game && window.game.input;
+    if (!input) return;
+
+    document.querySelectorAll('#mobile-controls .touch-btn').forEach((btn) => {
+      const key = btn.dataset.key;
+      const hold = btn.dataset.hold === '1';
+      let active = false;
+
+      const press = (e) => {
+        e.preventDefault();
+        if (e.pointerId != null && btn.setPointerCapture) {
+          try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+        if (active) return;
+        active = true;
+        if (hold) input.setVirtualDown(key, true);
+        else input.pressVirtual(key);
+        btn.classList.add('pressed');
+      };
+
+      const release = (e) => {
+        if (e) e.preventDefault();
+        if (!active) return;
+        active = false;
+        input.releaseVirtual(key);
+        btn.classList.remove('pressed');
+      };
+
+      btn.addEventListener('pointerdown', press, { passive: false });
+      btn.addEventListener('pointerup', release, { passive: false });
+      btn.addEventListener('pointercancel', release, { passive: false });
+      btn.addEventListener('lostpointercapture', release, { passive: false });
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    // main.js crée Game pendant le même événement DOMContentLoaded. Attendre
+    // une frame garantit que game.input existe.
+    requestAnimationFrame(setupTouchControls);
+  });
+})();
+</script>
+
+<script>
+(function () {
+  function installMobileControls() {
+    if (!window.game || !window.game.input) {
+      setTimeout(installMobileControls, 100);
+      return;
+    }
+    const input = window.game.input;
+    document.querySelectorAll('#mobile-controls .touch-btn').forEach((btn) => {
+      if (btn.dataset.mobileReady) return;
+      btn.dataset.mobileReady = "1";
+      const key = btn.dataset.key;
+      const hold = btn.dataset.hold === '1';
+      let active = false;
+
+      function press(e) {
+        if (e) e.preventDefault();
+        if (active) return;
+        active = true;
+        if (hold) input.setVirtualDown(key, true);
+        else input.pressVirtual(key);
+        btn.classList.add('pressed');
+      }
+      function release(e) {
+        if (e) e.preventDefault();
+        if (!active) return;
+        active = false;
+        input.releaseVirtual(key);
+        btn.classList.remove('pressed');
+      }
+
+      btn.addEventListener('pointerdown', press, {passive:false});
+      btn.addEventListener('pointerup', release, {passive:false});
+      btn.addEventListener('pointercancel', release, {passive:false});
+      btn.addEventListener('pointerleave', (e) => {
+        if (e.buttons === 0) release(e);
+      }, {passive:false});
+      btn.addEventListener('contextmenu', e => e.preventDefault());
+    });
+
+    document.documentElement.classList.add('mobile-ready');
+  }
+
+  // Do not rely on a single DOMContentLoaded frame: Android content://
+  // pages can initialize scripts in a slightly different order.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installMobileControls);
+  } else {
+    installMobileControls();
+  }
+})();
+</script>
+
+</body>
+</html>
